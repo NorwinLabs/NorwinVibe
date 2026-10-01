@@ -1,5 +1,5 @@
 {
-  "testMode": true,
+  "testMode": false,
   "items": {
     "cyberpunk": {
       "name": "Cyberpunk",

@@ -22,6 +22,7 @@ fs.copyFileSync(require.resolve('tweetnacl/nacl-fast.min.js'), path.join(www, 'v
 const pem = fs.readFileSync(path.join(repo, 'licensing', 'public.pem'), 'utf8').replace(/-----[^-]+-----|\s/g, '');
 const keyHex = Buffer.from(pem, 'base64').subarray(-32).toString('hex');
 const storeCfg = JSON.parse(fs.readFileSync(path.join(repo, 'store.config.json'), 'utf8'));
+if (process.env.VIBE_TESTMODE === '1') storeCfg.testMode = true; // local debug builds only
 if (process.env.VIBE_RELEASE === '1') storeCfg.testMode = false; // release builds never ship the free test unlock
 const verProps = fs.readFileSync(path.join(mobile, 'version.properties'), 'utf8');
 const appVersion = ((verProps.match(/^VERSION_NAME=(.*)$/m) || [])[1] || '').trim();

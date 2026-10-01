@@ -64,7 +64,7 @@ The app never handles card details. It sends the buyer to your checkout page, th
 4. The buyer opens **Settings > Theme Store**, pastes the key and hits **Redeem**.
 
 ### Test mode
-`"testMode": true` in `store.config.json` shows an **Unlock (test)** button that grants a pack without paying. **Set it to `false` before you ship**, otherwise anyone can unlock for free.
+The free **Unlock (test)** button is **off** in the committed `store.config.json` (`"testMode": false`), because the release workflows refuse to publish with it on. To use it yourself, set an environment variable: `NORWINVIBE_TESTMODE=1 npm start` on Windows, or `VIBE_TESTMODE=1 npm run sync` when building the phone app locally. Release builds always ship with it off.
 
 ### Adding another pack
 Add an entry to `PAID` in `main.js` and `store.config.json`, the option values in `ENUMS`, the card in `STORE_UI` in `src/features.js`, plus CSS for the new `data-theme` / `data-record` / `data-needle` / `data-viz` values.

@@ -93,6 +93,17 @@ jobs:
           KEY_PASSWORD: ${{ secrets.VIBE_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibe-release-reports-${{ github.run_number }}
+          path: |
+            mobile/android/app/build/reports/**
+            mobile/android/app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Get version info
         id: get_version
         run: |

@@ -32,8 +32,10 @@ const PUBLIC_KEY = (() => { try { return fs.readFileSync(path.join(__dirname, 'l
 const storeCfg = () => {
   let c;
   try { c = JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { c = { testMode: false, items: {} }; }
-  // Test mode is a development convenience: installed builds ignore it unless NORWINVIBE_TESTMODE=1 is set.
-  if (app.isPackaged && process.env.NORWINVIBE_TESTMODE !== '1') c.testMode = false;
+  // Test mode (the free "Unlock (test)" button) is off in the committed config. Turn it on for yourself with the
+  // environment variable NORWINVIBE_TESTMODE=1; installed builds ignore testMode in the file.
+  if (process.env.NORWINVIBE_TESTMODE === '1') c.testMode = true;
+  else if (app.isPackaged) c.testMode = false;
   return c;
 };
 const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart'];
