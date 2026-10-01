@@ -52,6 +52,7 @@ body.mobile { padding: 0; height: 100%; }
 .mobile .card.idle #btn-add-cta { display: block; }
 .mobile .card.idle .lyric { display: none; }
 
+#update-msg { display: block !important; }
 .lib-btns { display: flex; gap: 6px; }
 .lib-head .act { padding: 8px 12px; }
 .lib-head #lib-pick { background: rgba(255,255,255,.08); }

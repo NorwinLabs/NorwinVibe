@@ -454,7 +454,7 @@ function showVersion(u) {
   creditEl.classList.remove('update'); verEl.disabled = false;
   let msg = '';
   if (u && u.state === 'downloading') { verEl.textContent = `${v} \u00b7 updating ${u.percent || 0}%`; msg = `Downloading ${u.version ? 'v' + u.version : 'an update'}\u2026 ${u.percent || 0}%`; }
-  else if (u && u.state === 'ready') { creditEl.classList.add('update'); verEl.textContent = `Restart to update to v${u.version}`; verEl.title = 'Install the update and relaunch'; msg = `v${u.version} is ready. Click the version at the bottom to restart.`; }
+  else if (u && u.state === 'ready') { creditEl.classList.add('update'); verEl.textContent = `${window.UPDATE_VERB || 'Restart to update'} to v${u.version}`; verEl.title = window.UPDATE_TITLE || 'Install the update and relaunch'; msg = `v${u.version} is ready. ${window.UPDATE_HOWTO || 'Click the version at the bottom to restart.'}`; }
   else { verEl.textContent = v; verEl.title = 'Version'; msg = u && u.state === 'none' ? 'You are on the latest version.' : u && u.state === 'checking' ? 'Checking for updates\u2026' : u && u.state === 'error' ? 'Could not check for updates. Will try again later.' : u && u.state === 'unsupported' ? 'Updates are checked in the installed app.' : ''; }
   const m = $('update-msg'); if (m) m.textContent = msg;
 }

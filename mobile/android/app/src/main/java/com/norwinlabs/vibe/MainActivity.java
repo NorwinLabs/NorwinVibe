@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MediaServicePlugin.class); // must happen before super.onCreate
         registerPlugin(MusicScanPlugin.class);
+        registerPlugin(AppUpdatePlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 15 draws apps edge-to-edge, which slid the status bar over the top buttons and made them hard to tap.

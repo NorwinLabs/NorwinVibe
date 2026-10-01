@@ -390,6 +390,41 @@
     cb.sleep && cb.sleep(sleepEnds);
   }
 
+  /* ================= in-app updates (GitHub releases) ================= */
+  const updater = plugin('AppUpdate'), RELEASE_API = 'https://api.github.com/repos/NorwinLabs/NorwinVibe/releases/latest';
+  window.UPDATE_VERB = 'Tap to install'; window.UPDATE_TITLE = 'Install the downloaded update'; window.UPDATE_HOWTO = 'Tap the version at the bottom to install it.';
+  let upd = { state: updater ? 'idle' : 'unsupported' }, updBusy = false, updInfo = null;
+  const setUpd = (u) => { upd = { ...u, current: window.APP_VERSION || '' }; if (cb.update) cb.update(upd); };
+  if (updater && updater.addListener) updater.addListener('progress', (p) => { if (upd.state === 'downloading') setUpd({ ...upd, percent: p.percent }); });
+  async function updateCheck(manual) {
+    if (!updater) return upd;
+    if (upd.state === 'ready' && manual) { updateInstall(); return upd; } // "Update ready": tapping the button installs it
+    if (updBusy) return upd; updBusy = true;
+    try {
+      if (!updInfo) updInfo = await updater.info();
+      setUpd({ state: 'checking' });
+      const r = await fetch(RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } }); if (!r.ok) throw new Error('feed');
+      const rel = await r.json();
+      let best = null; // the newest release file is the one with the highest build number in its name
+      for (const a of rel.assets || []) { const m = /-b(\d+)\.apk$/.exec(a.name || ''); if (m && (!best || +m[1] > best.build)) best = { build: +m[1], url: a.browser_download_url }; }
+      if (!best || best.build <= Number(updInfo.versionCode)) { setUpd({ state: 'none' }); return upd; }
+      const version = String(rel.tag_name || '').replace(/^v/, '') || `build ${best.build}`;
+      setUpd({ state: 'downloading', version, percent: 0 });
+      await updater.download({ url: best.url });
+      setUpd({ state: 'ready', version });
+    } catch { setUpd({ state: 'error' }); }
+    finally { updBusy = false; }
+    return upd;
+  }
+  async function updateInstall() {
+    if (!updater || upd.state !== 'ready') return;
+    try { const r = await updater.install(); if (r && r.needsPermission) toast('Allow installs from NorwinVibe, then tap install again'); } catch { toast('Could not start the install'); }
+  }
+  if (updater) setTimeout(() => { // quiet check shortly after launch, at most every 6 hours
+    const last = LS.get('vibe.updChecked', 0); if (Date.now() - last < 6 * 3600e3) return;
+    LS.set('vibe.updChecked', Date.now()); updateCheck(false);
+  }, 4000);
+
   /* ================= the bridge the shared UI talks to ================= */
   const storeCfg = () => window.STORE_CONFIG || { items: {} };
   window.api = {
@@ -407,6 +442,7 @@
       else if (k === 'volstep') { setVol(Math.min(1, Math.max(0, audio.volume + parseFloat(v)))); emit(); }
       else if (k === 'mute') { muted = v === '1'; decks.forEach((d) => { d.muted = muted; }); emit(); }
     },
+    onUpdate: (f) => { cb.update = f; }, updateState: async () => upd, updateCheck: () => updateCheck(true), updateInstall: () => updateInstall(),
     prefs: async () => { const { devAsFree, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: window.APP_VERSION || '' }; },
     setPrefs: (patch) => {
       for (const [k, v] of Object.entries(patch || {})) {
