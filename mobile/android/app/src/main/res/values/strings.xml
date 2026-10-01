@@ -4,4 +4,5 @@
     <string name="title_activity_main">NorwinVibe</string>
     <string name="package_name">com.norwinlabs.vibe</string>
     <string name="custom_url_scheme">com.norwinlabs.vibe</string>
+    <string name="widget_description">What is playing in NorwinVibe, with previous, play/pause and next (Pro)</string>
 </resources>

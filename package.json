@@ -29,7 +29,9 @@
       "native/**/*",
       "assets/**/*",
       "licensing/public.pem",
-      "store.config.json"
+      "store.config.json",
+      "lib/**/*",
+      "pro.config.json"
     ],
     "asarUnpack": [
       "native/**/*"

@@ -1,0 +1,269 @@
+name: Release (Windows + Android)
+
+# Every release builds BOTH apps and publishes them together as one GitHub Release (v<major>.<minor>.<run number>):
+#   - the Windows installer, which also refreshes the "desktop-latest" feed that installed copies check for updates;
+#   - the signed Android APK.
+# The Windows part never waits on the phone build: if Android fails (for example the signing secrets are missing) the
+# Windows installer and update feed still go out, the release is published without an APK, and this run is marked failed
+# so it does not go unnoticed.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'main.js'
+      - 'preload.js'
+      - 'src/**'
+      - 'lib/**'
+      - 'native/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pro.config.json'
+      - 'store.config.json'
+      - 'licensing/public.pem'
+      - 'mobile/**'
+      - '.github/workflows/release.yml'
+  # Re-run a release (for example after adding the signing secrets) without an empty commit.
+  workflow_dispatch:
+
+# Two releases must never race to bump the same version file.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Updates only happen when the version goes UP, so each release gets <major>.<minor>.<run number>.
+      # Change major.minor in package.json by hand for bigger releases; the patch number is automatic and never committed.
+      - name: Set version
+        id: version
+        run: |
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          VERSION="$BASE.${{ github.run_number }}"
+          npm version "$VERSION" --no-git-tag-version
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer
+        run: npm run dist
+
+      - name: Name the installer for the release
+        run: cp dist/NorwinVibe-Setup.exe "dist/NorwinVibe-Setup-${{ steps.version.outputs.version }}.exe"
+
+      - name: Keep the installer for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/NorwinVibe-Setup-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      # The update feed. A fixed tag means installed apps always know where to look. Assets keep constant names, so each
+      # build replaces the last. This does not depend on the Android job.
+      - name: Update the rolling update feed
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: Desktop update feed (do not delete)
+          body: Files that installed copies of NorwinVibe check for updates. Download the installer from the versioned releases instead.
+          draft: false
+          prerelease: true
+          make_latest: 'false'
+          overwrite_files: true
+          files: |
+            dist/NorwinVibe-Setup.exe
+            dist/NorwinVibe-Setup.exe.blockmap
+            dist/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      apk: ${{ steps.get_version.outputs.apk }}
+      version: ${{ steps.get_version.outputs.version_name }}
+      build: ${{ steps.get_version.outputs.version_code }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # Capacitor 7's Android project compiles with Java 21.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # The release keystore is never in the repository. It is restored from a repository secret for the length of this
+      # job and deleted afterwards.
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VIBE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::VIBE_KEYSTORE_BASE64 is not set. Add the Android signing secrets before releasing;"
+            echo "::error::without them the APK would be unsigned and could not be installed as an update."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vibe-release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/vibe-release.jks" >> "$GITHUB_ENV"
+
+      # Bump the build number for this release. It is committed back below so numbers keep increasing.
+      - name: Bump version code
+        run: |
+          CODE=$(grep '^VERSION_CODE' version.properties | tr -d '\r' | cut -d'=' -f2)
+          NEW=$((CODE + 1))
+          sed -i "s/^VERSION_CODE=.*/VERSION_CODE=$NEW/" version.properties
+          echo "Build number $CODE -> $NEW"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build:web
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build release APK
+        working-directory: mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.VIBE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VIBE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VIBE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-reports-${{ github.run_number }}
+          path: |
+            mobile/android/app/build/reports/**
+            mobile/android/app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Get version info
+        id: get_version
+        run: |
+          VERSION_NAME=$(grep '^VERSION_NAME' version.properties | tr -d '\r' | cut -d'=' -f2)
+          VERSION_CODE=$(grep '^VERSION_CODE' version.properties | tr -d '\r' | cut -d'=' -f2)
+          APK="NorwinVibe-Android-${VERSION_NAME}-b${VERSION_CODE}.apk"
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/*.apk "dist/$APK"
+
+      - name: Keep the APK for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/dist/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      # Persist the bump, otherwise the next release starts from the same number.
+      - name: Commit version bump
+        run: |
+          if git diff --quiet -- version.properties; then
+            echo "version.properties unchanged, nothing to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add version.properties
+            git commit -m "chore(mobile): bump version to ${{ steps.get_version.outputs.version_name }} (build ${{ steps.get_version.outputs.version_code }}) [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vibe-release.jks"
+
+  publish:
+    # Runs even if the Android build failed, as long as Windows built, so a phone problem never blocks a Windows release.
+    needs: [windows, android]
+    if: ${{ always() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: assets
+
+      - name: Download the Android APK (if it was built)
+        if: ${{ needs.android.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: assets
+
+      - name: Describe the release
+        id: notes
+        run: |
+          if [ "${{ needs.android.result }}" = "success" ]; then
+            echo "android=**Android:** ${{ needs.android.outputs.apk }} (version ${{ needs.android.outputs.version }}, build ${{ needs.android.outputs.build }}). Sideload it on your phone." >> "$GITHUB_OUTPUT"
+          else
+            echo "android=**Android:** no APK in this release because the Android build did not succeed. See the workflow run." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.windows.outputs.version }}
+          name: NorwinVibe v${{ needs.windows.outputs.version }}
+          body: |
+            **Windows:** NorwinVibe-Setup-${{ needs.windows.outputs.version }}.exe
+            ${{ steps.notes.outputs.android }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          make_latest: 'true'
+          files: |
+            assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

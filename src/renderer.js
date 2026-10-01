@@ -53,11 +53,45 @@ const livePos = () => {
 const PALETTE_VARS = ['--accent', '--accent-2', '--veil-a', '--veil-b'];
 const clearPalette = () => PALETTE_VARS.forEach((v) => document.documentElement.style.removeProperty(v));
 
+/* When a song has no real picture, the background is not left empty or purple: it gets a colour of its own, picked from the
+   song's name, so the same song always gets the same colour and different songs look different. */
+function randomPalette(key) {
+  if (document.documentElement.dataset.theme && document.documentElement.dataset.theme !== 'art') { clearPalette(); return; }
+  let h = 2166136261; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } // FNV-1a
+  const hue = h % 360, sat = 62 + ((h >>> 9) % 18), lig = 52 + ((h >>> 14) % 8), shift = 40 + ((h >>> 5) % 40);
+  const st2 = document.documentElement.style;
+  st2.setProperty('--accent', `hsl(${hue} ${sat}% ${lig + 4}%)`);
+  st2.setProperty('--accent-2', `hsl(${(hue + shift) % 360} ${sat - 4}% ${lig}%)`);
+  st2.setProperty('--veil-a', '0.5'); st2.setProperty('--veil-b', '0.84');
+}
+
+/* Some sources hand over their own logo (a browser's icon, a favicon) instead of cover art. It is not a picture of the song, so
+   it is not shown. Logos have transparent corners and gaps, which photos and thumbnails do not; favicons are also tiny. */
+const artRejected = new Set(); let artCheckToken = 0, artPending = '';
+function isAppIcon(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onerror = () => resolve({ icon: false });
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      try {
+        const S = 48, c = document.createElement('canvas'); c.width = S; c.height = S;
+        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, S, S);
+        const d = x.getImageData(0, 0, S, S).data; let clear = 0;
+        for (let i = 3; i < d.length; i += 4) if (d[i] < 128) clear++;
+        if (clear / (S * S) >= 0.06) return resolve({ icon: true, reason: 'transparent', w, h });
+      } catch {}
+      resolve({ icon: Math.max(w, h) <= 64, reason: 'tiny', w, h });
+    };
+    img.src = dataUrl;
+  });
+}
+
 /* Adapts the whole look (accent colours + how dark the veil over the blurred art is) to the current thumbnail.
    Handles what video thumbnails throw at it: letterbox/pillarbox bars, grey or very dark frames, bright frames. */
 function applyPalette(dataUrl) {
   if (document.documentElement.dataset.theme && document.documentElement.dataset.theme !== 'art') { clearPalette(); return; }
-  if (!dataUrl) { clearPalette(); return; }
+  if (!dataUrl) { if (st.active) randomPalette(lastKey || ''); else clearPalette(); return; }
   const img = new Image();
   img.onload = () => {
     const W = 48, H = Math.max(12, Math.min(48, Math.round(W * img.naturalHeight / img.naturalWidth)));
@@ -107,14 +141,26 @@ function applyPalette(dataUrl) {
   img.src = dataUrl;
 }
 
-function showArt(data) {
+function showNoArt() { // blank background + a colour of its own for this song
   artWide = false;
-  if (data) { const i = new Image(); i.onload = () => { artWide = i.naturalWidth / i.naturalHeight > 1.5; if (st.active) el.source.textContent = sourceLabel(st); }; i.src = data; }
-  el.label.classList.toggle('art', !!data);
-  el.label.style.backgroundImage = data ? `url("${data}")` : '';
-  el.bg.style.backgroundImage = data ? `url("${data}")` : '';
-  el.bg.classList.toggle('on', !!data);
-  applyPalette(data);
+  el.label.classList.remove('art'); el.label.style.backgroundImage = '';
+  el.bg.style.backgroundImage = ''; el.bg.classList.remove('on');
+  applyPalette('');
+}
+function showArt(data) {
+  const token = ++artCheckToken;
+  if (!data) { artPending = ''; showNoArt(); return; }
+  const key = lastKey; artPending = key;
+  isAppIcon(data).then((r) => {
+    if (token !== artCheckToken) return; // another song arrived while checking
+    artPending = '';
+    if (r.icon) { artRejected.add(key); if (artRejected.size > 300) artRejected.clear(); if (bridge.artRejected) bridge.artRejected(key); showNoArt(); return; }
+    artWide = false;
+    const i = new Image(); i.onload = () => { artWide = i.naturalWidth / i.naturalHeight > 1.5; if (st.active) el.source.textContent = sourceLabel(st); }; i.src = data;
+    el.label.classList.add('art'); el.label.style.backgroundImage = `url("${data}")`;
+    el.bg.style.backgroundImage = `url("${data}")`; el.bg.classList.add('on');
+    applyPalette(data);
+  });
 }
 
 /* ---------- title marquee ---------- */
@@ -165,7 +211,7 @@ function onState(m) {
     if (!m.active) showArt('');
     el.card.classList.add('swap'); setTimeout(() => el.card.classList.remove('swap'), 450);
   }
-  if (m.active && art.key === key && art.data && !el.label.classList.contains('art')) showArt(art.data);
+  if (m.active && art.key === key && art.data && !el.label.classList.contains('art') && !artRejected.has(key) && artPending !== key) showArt(art.data);
 
   el.prev.disabled = !m.active || m.canPrev === false;
   el.next.disabled = !m.active || m.canNext === false;

@@ -1,9 +1,13 @@
 const {
   app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, session, desktopCapturer,
-  globalShortcut, Notification, net, shell,
+  globalShortcut, Notification, net, shell, dialog, powerMonitor,
 } = require('electron');
 const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
+const { createObsServer } = require('./lib/obs.js');
+const { DiscordRpc } = require('./lib/discord.js');
+const { createFader } = require('./lib/fade.js');
+const { cleanMeta } = require('./src/titles.js');
 const { spawn } = require('child_process');
 const readline = require('readline');
 const path = require('path');
@@ -14,9 +18,12 @@ app.setAppUserModelId(APP_ID);
 
 const SIZES = { full: { w: 360, h: 560 }, mini: { w: 360, h: 124 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
-const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover', lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
+  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
 const ENUMS = {
   bgart: ['cover', 'soft', 'off'],
+  autoDay: THEMES, autoEve: THEMES, autoNight: THEMES, ssMin: ['1', '3', '5', '10'],
   speed: ['slow', 'relaxed', '33', '45'],
   theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
   record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
@@ -29,16 +36,9 @@ const PAID = {
   nightcity: { theme: ['nightcity'], record: ['nightcity'], needle: ['nightcity'], viz: ['nightcity'] },
 };
 const PUBLIC_KEY = (() => { try { return fs.readFileSync(path.join(__dirname, 'licensing', 'public.pem')); } catch { return null; } })();
-const storeCfg = () => {
-  let c;
-  try { c = JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { c = { testMode: false, items: {} }; }
-  // Test mode (the free "Unlock (test)" button) is off in the committed config. Turn it on for yourself with the
-  // environment variable NORWINVIBE_TESTMODE=1; installed builds ignore testMode in the file.
-  if (process.env.NORWINVIBE_TESTMODE === '1') c.testMode = true;
-  else if (app.isPackaged) c.testMode = false;
-  return c;
-};
-const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart'];
+const storeCfg = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { return { items: {} }; } };
+const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle'];
+const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'screensaver', 'ssMin', 'obs', 'discord', 'smartshuffle']); // only settable with a Pro license
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
 const loadPrefs = () => { try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')); } catch { return {}; } };
@@ -47,26 +47,54 @@ const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(pre
 let win, helper, tray, quitting = false, full = false, normalBounds = null;
 let prefs = {};
 const pref = (k) => (k in prefs ? prefs[k] : DEFAULTS[k]);
-const owned = () => (Array.isArray(prefs.owned) ? prefs.owned : []);
-const allowed = (k, v) => { // is this option value free, or unlocked by a pack the user owns?
-  for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return owned().includes(id);
-  return true;
-};
-function grant(id) {
-  if (!PAID[id]) return false;
-  prefs.owned = [...new Set([...owned(), id])]; savePrefs();
-  toRenderer('store:owned', prefs.owned);
-  return true;
-}
-function verifyLicense(key) { // key = base64url(payload) + '.' + base64url(ed25519 signature)
+
+/* ---------- entitlements ----------
+   What you own is derived ONLY from signed license keys (prefs.licenses), re-verified against the public key every time.
+   Editing prefs.json can't grant anything, and keys can't be forged without the private key (.licensing/private.pem).
+   Items: a theme pack id, "pro" (Pro features + every pack) and "dev" (developer mode: everything + the Developer panel). */
+const PACK_IDS = Object.keys(PAID);
+const KNOWN_ITEMS = new Set([...PACK_IDS, 'pro', 'dev']);
+const STORE_IDS = ['pro', ...PACK_IDS]; // what the Theme Store sells, in display order ('dev' is never sold)
+let entitled = new Set(), devActive = false;
+function verifyLicense(key) { // key = base64url(payload) + '.' + base64url(ed25519 signature); returns the payload or null
   try {
     if (!PUBLIC_KEY) return null;
     const [p, sig] = String(key).trim().split('.');
     const payload = Buffer.from(p, 'base64url');
     if (!crypto.verify(null, payload, PUBLIC_KEY, Buffer.from(sig, 'base64url'))) return null;
     const o = JSON.parse(payload.toString());
-    return PAID[o.item] ? o.item : null;
+    if (!KNOWN_ITEMS.has(o.item)) return null;
+    if (o.exp && Date.now() > o.exp) return null; // expired
+    return o;
   } catch { return null; }
+}
+function recompute() {
+  const real = new Set();
+  for (const k of Array.isArray(prefs.licenses) ? prefs.licenses : []) { const o = verifyLicense(k); if (o) real.add(o.item); }
+  devActive = real.has('dev');
+  const set = new Set();
+  if (devActive && prefs.devAsFree) set.add('dev'); // developer pretending to be a free user, to test the locked experience
+  else {
+    real.forEach((i) => set.add(i));
+    if (devActive) set.add('pro');
+    if (set.has('pro')) PACK_IDS.forEach((i) => set.add(i)); // Pro includes every theme pack
+  }
+  entitled = set;
+  if (win) syncProServices(); // a license being added, removed or expiring starts or stops the Pro services
+}
+const entitlementList = () => [...entitled];
+const allowed = (k, v) => { // is this option value free, or unlocked by something the user holds a valid license for?
+  for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id);
+  return true;
+};
+function dropLockedChoices() { for (const k of Object.keys(ENUMS)) if (k in prefs && !allowed(k, prefs[k])) delete prefs[k]; }
+function addLicense(key) {
+  const o = verifyLicense(key); if (!o) return null;
+  const k = String(key).trim(), list = Array.isArray(prefs.licenses) ? prefs.licenses : [];
+  if (!list.includes(k)) list.push(k);
+  prefs.licenses = list; savePrefs(); recompute();
+  toRenderer('store:owned', entitlementList());
+  return o;
 }
 
 const sendCmd = (c) => { if (helper?.stdin.writable) helper.stdin.write(c + '\n'); };
@@ -165,7 +193,8 @@ function createTray() {
 
 function createWindow() {
   prefs = loadPrefs();
-  for (const k of Object.keys(ENUMS)) if (k in prefs && !allowed(k, prefs[k])) delete prefs[k];
+  delete prefs.owned; // older builds trusted a plain flag in this file; entitlements now come only from signed keys
+  recompute(); dropLockedChoices();
   const size = pref('mini') ? SIZES.mini : SIZES.full;
   const wa = screen.getPrimaryDisplay().workArea;
   const pos = clampToScreen(prefs.x ?? wa.x + wa.width - size.w - 20, prefs.y ?? wa.y + wa.height - size.h - 20, size.w, size.h);
@@ -210,12 +239,95 @@ function startHelper() {
       const msg = JSON.parse(line);
       toRenderer(msg.type === 'art' ? 'media:art' : 'media:state', msg);
       onMedia(msg);
+      trackMedia(msg);
     } catch (e) { if (!(e instanceof SyntaxError)) console.error('[media]', e); } // bad JSON lines are ignored; real errors are not
   });
   helper.stderr.on('data', (d) => console.error('[smtc]', String(d).trim()));
   helper.stdin.on('error', () => {});
   helper.on('exit', () => { if (!quitting) setTimeout(startHelper, 2000); });
 }
+
+/* ---------- Pro services: OBS overlay, Discord status, screensaver, sleep fade-out ----------
+   Everything here checks entitled.has('pro') live, so it stops as soon as a license lapses or is removed. */
+const BROWSER_RE = /chrome|edge|msedge|firefox|brave|opera|vivaldi|arc/i;
+let lastState = null, lastStateAt = 0, lastArt = null, lastVol = 1;
+function displayOf(m) { // same title tidy-up the player shows for browser videos
+  if (m && BROWSER_RE.test(m.app || '')) { const c = cleanMeta(m.title, m.artist, m.dur); return { title: c.title, artist: c.artist }; }
+  return { title: (m && m.title) || '', artist: (m && m.artist) || '' };
+}
+function trackMedia(msg) {
+  if (msg.type === 'art') {
+    const m = /^data:([^;]+);base64,(.+)$/.exec(msg.data || '');
+    if (m) lastArt = { key: msg.key, mime: m[1], bytes: Buffer.from(m[2], 'base64') };
+    return;
+  }
+  if (msg.type !== 'state') return;
+  lastState = msg; lastStateAt = Date.now();
+  if (typeof msg.vol === 'number') lastVol = msg.vol;
+  discordTick();
+}
+const proCfg = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'pro.config.json'), 'utf8')); } catch { return {}; } };
+
+const obs = createObsServer(() => {
+  const m = lastState, d = displayOf(m), active = !!(m && m.active);
+  const pos = active ? Math.min(m.dur > 0 ? m.dur : Infinity, m.pos + (m.playing ? (Date.now() - lastStateAt) / 1000 : 0)) : 0;
+  const hasArt = !!(lastArt && m && lastArt.key === m.key && !lastArt.rejected);
+  return { state: { active, playing: !!(m && m.playing), title: d.title, artist: d.artist, album: (m && m.album) || '', pos, dur: (m && m.dur) || 0, artKey: (m && m.key) || '', hasArt }, art: hasArt ? lastArt : null };
+});
+let obsInfo = null, obsError = '';
+
+let discord = null, discordState = 'off', discordSig = '', discordAt = 0, discordTimer = null;
+function discordActivity(m) {
+  if (!m || !m.active) return null;
+  const d = displayOf(m), act = { type: 2, details: (d.title || 'Unknown title').slice(0, 128), instance: false };
+  if (m.playing && m.dur > 0) {
+    const start = Math.round(Date.now() / 1000 - m.pos);
+    act.state = (d.artist || '').slice(0, 128) || undefined;
+    act.timestamps = { start, end: start + Math.round(m.dur) };
+  } else act.state = `Paused${d.artist ? ' \u00b7 ' + d.artist : ''}`.slice(0, 128);
+  return act;
+}
+function discordTick() { // sends an update when the song / play state / position changes, at most once every 4 seconds
+  if (!discord) return;
+  const m = lastState, act = discordActivity(m);
+  const sig = !act ? 'none' : act.timestamps ? `${m.key}|play|${Math.round(act.timestamps.start / 3)}` : `${m.key}|paused`;
+  if (sig === discordSig) return;
+  const wait = 4000 - (Date.now() - discordAt);
+  if (wait > 0) { clearTimeout(discordTimer); discordTimer = setTimeout(discordTick, wait + 50); return; }
+  discordSig = sig; discordAt = Date.now(); discord.setActivity(act);
+}
+const proStatus = () => ({ obs: obsInfo ? { url: obsInfo.url } : obsError ? { error: obsError } : null, discord: { state: discordState } });
+const pushProStatus = () => toRenderer('pro:status', proStatus());
+async function syncProServices() {
+  const pro = entitled.has('pro');
+  if (pro && pref('obs')) {
+    if (!obs.running) { try { obsInfo = await obs.start(17773); obsError = ''; } catch (e) { obsInfo = null; obsError = e.code === 'EADDRINUSE' ? 'ports 17773 to 17778 are all in use' : String(e.message).slice(0, 80); } }
+  } else if (obs.running) { await obs.stop(); obsInfo = null; obsError = ''; }
+
+  const id = String(proCfg().discordClientId || '').trim();
+  if (pro && pref('discord')) {
+    if (!/^\d{17,20}$/.test(id)) { if (discord) { discord.stop(); discord = null; } discordState = 'no-id'; }
+    else if (!discord) {
+      discord = new DiscordRpc({ clientId: id, pipes: process.env.NORWINVIBE_DISCORD_PIPE ? [process.env.NORWINVIBE_DISCORD_PIPE] : null });
+      discord.on('state', (st) => { discordState = st === 'idle' ? 'off' : st; pushProStatus(); });
+      discordSig = ''; discordState = 'connecting'; discord.start(); discordTick();
+    }
+  } else { if (discord) { discord.stop(); discord = null; } discordState = 'off'; }
+  pushProStatus();
+}
+
+/* screensaver: Ambient mode when the whole computer has been idle and music is playing */
+let ssActive = false, ssHidden = false;
+function startScreensaverWatch() {
+  setInterval(() => {
+    if (!entitled.has('pro') || !pref('screensaver') || ssActive || full || !(lastState && lastState.active && lastState.playing)) return;
+    if (powerMonitor.getSystemIdleTime() >= Number(pref('ssMin')) * 60) toRenderer('screensaver:request'); // the player decides (it never covers a video)
+  }, 5000);
+}
+
+/* sleep timer fade-out */
+const FADE_MS = 15000;
+const fader = createFader({ send: (c) => sendCmd(c), getVolume: () => lastVol });
 
 /* ---------- lyrics (LRCLIB: free, no account; sends artist + title over HTTPS) ---------- */
 const lyricCache = new Map();
@@ -246,22 +358,22 @@ async function fetchLyrics({ artist, title, album, dur }) {
 }
 
 /* ---------- sleep timer ---------- */
-let sleepTimer = null, sleepEnds = 0;
+let sleepTimer = null, sleepFadeTimer = null, sleepEnds = 0;
 function setSleep(mins) {
-  clearTimeout(sleepTimer); sleepTimer = null; sleepEnds = 0;
+  clearTimeout(sleepTimer); clearTimeout(sleepFadeTimer); fader.cancel(); sleepTimer = sleepFadeTimer = null; sleepEnds = 0;
   if (mins > 0) {
-    sleepEnds = Date.now() + mins * 60000;
-    sleepTimer = setTimeout(() => {
-      sendCmd('pause'); sleepEnds = 0; toRenderer('sleep:state', 0);
-      if (Notification.isSupported()) new Notification({ title: 'Sleep timer', body: 'Playback paused.', silent: true }).show();
-    }, mins * 60000);
+    const ms = mins * 60000; sleepEnds = Date.now() + ms;
+    const fade = entitled.has('pro') && pref('fadeout'); // Pro: ease the volume down over the last 15 seconds, then pause
+    const done = () => { sleepEnds = 0; toRenderer('sleep:state', 0); if (Notification.isSupported()) new Notification({ title: 'Sleep timer', body: 'Playback paused.', silent: true }).show(); };
+    if (fade) { sleepFadeTimer = setTimeout(() => fader.start(FADE_MS, 20), ms - FADE_MS); sleepTimer = setTimeout(done, ms); }
+    else sleepTimer = setTimeout(() => { sendCmd('pause'); done(); }, ms);
   }
   toRenderer('sleep:state', sleepEnds);
 }
 
 /* ---------- auto-update ----------
    Installed builds check the "desktop-latest" GitHub release (see package.json build.publish and
-   .github/workflows/desktop-release.yml), download a newer installer in the background and offer a restart. */
+   .github/workflows/release.yml), download a newer installer in the background and offer a restart. */
 let updateState = { state: 'idle' };
 function setupUpdater() {
   const testFeed = process.env.NORWINVIBE_UPDATE_URL; // for testing against a local server
@@ -269,7 +381,7 @@ function setupUpdater() {
   const push = (u) => { updateState = { ...u, current: app.getVersion() }; toRenderer('update:status', updateState); };
   ipcMain.handle('update:state', () => (supported ? updateState : { state: 'unsupported', current: app.getVersion() }));
   ipcMain.handle('update:check', () => { if (supported) checkNow(); return supported ? updateState : { state: 'unsupported', current: app.getVersion() }; });
-  ipcMain.on('update:install', () => { if (updateState.state === 'ready') { quitting = true; autoUpdater.quitAndInstall(true, true); } }); // silent install, then relaunch
+  ipcMain.on('update:install', () => { if (updateState.state === 'ready' && !updateState.fake) { quitting = true; autoUpdater.quitAndInstall(true, true); } }); // silent install, then relaunch
   if (!supported) return;
 
   if (testFeed) { autoUpdater.setFeedURL({ provider: 'generic', url: testFeed }); autoUpdater.forceDevUpdateConfig = true; autoUpdater.autoInstallOnAppQuit = false; }
@@ -301,15 +413,17 @@ function registerHotkeys() {
 }
 
 /* ---------- IPC ---------- */
-ipcMain.handle('prefs:get', () => ({ ...DEFAULTS, ...prefs, owned: owned(), sleepEnds, version: app.getVersion() }));
+ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
 ipcMain.on('prefs:set', (_e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   for (const [k, v] of Object.entries(patch)) {
+    if (PRO_KEYS.has(k) && !entitled.has('pro')) continue;
     if (ENUMS[k] && ENUMS[k].includes(v) && allowed(k, v)) prefs[k] = v;
     else if (BOOLS.includes(k) && typeof v === 'boolean') prefs[k] = v;
   }
   savePrefs();
   if ('autostart' in patch) applyAutostart();
+  if ('obs' in patch || 'discord' in patch) syncProServices();
 });
 ipcMain.handle('lyrics:get', (_e, m) => {
   const s = (v) => String(v || '').slice(0, 200);
@@ -331,21 +445,59 @@ ipcMain.on('toast', (_e, t) => {
 ipcMain.handle('store:info', () => {
   const c = storeCfg();
   return {
-    testMode: !!c.testMode, owned: owned(),
-    items: Object.fromEntries(Object.keys(PAID).map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])),
+    owned: entitlementList(),
+    items: Object.fromEntries(STORE_IDS.map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])),
   };
 });
 ipcMain.handle('store:buy', async (_e, id) => { // opens YOUR checkout page (e.g. a Stripe Payment Link) in the browser
   const url = storeCfg().items?.[id]?.checkoutUrl;
-  if (!PAID[id] || !/^https:\/\//.test(url || '')) return { ok: false, error: 'Checkout is not set up yet. Add a checkoutUrl in store.config.json.' };
+  if (!STORE_IDS.includes(id) || !/^https:\/\//.test(url || '')) return { ok: false, error: 'Checkout is not set up yet. Add a checkoutUrl in store.config.json.' };
   await shell.openExternal(url);
   return { ok: true };
 });
 ipcMain.handle('store:redeem', (_e, key) => {
-  const id = verifyLicense(key);
-  return id && grant(id) ? { ok: true, item: id } : { ok: false, error: 'That license key is not valid.' };
+  const o = addLicense(key);
+  return o ? { ok: true, item: o.item } : { ok: false, error: 'That license key is not valid or has expired.' };
 });
-ipcMain.handle('store:testunlock', (_e, id) => (storeCfg().testMode && grant(id) ? { ok: true } : { ok: false, error: 'Test mode is off.' }));
+
+/* ---------- developer mode (only works while a valid, unexpired "dev" key is held) ---------- */
+ipcMain.handle('dev:info', () => devActive ? {
+  version: app.getVersion(), packaged: app.isPackaged, electron: process.versions.electron, node: process.versions.node,
+  userData: app.getPath('userData'), asFree: !!prefs.devAsFree, licenses: (prefs.licenses || []).length,
+} : null);
+ipcMain.on('dev:devtools', () => { if (devActive && win) win.webContents.toggleDevTools(); });
+ipcMain.on('dev:asfree', (_e, on) => {
+  if (!devActive) return;
+  prefs.devAsFree = !!on; recompute(); dropLockedChoices(); savePrefs();
+  toRenderer('store:owned', entitlementList());
+});
+ipcMain.on('dev:fakeupdate', () => { // shows the "Restart to update" state without a real update
+  if (!devActive) return;
+  updateState = { state: 'ready', version: '9.9.9', fake: true, current: app.getVersion() };
+  toRenderer('update:status', updateState);
+});
+ipcMain.on('dev:signout', () => {
+  if (!devActive) return;
+  prefs.licenses = (prefs.licenses || []).filter((k) => { const o = verifyLicense(k); return !(o && o.item === 'dev'); });
+  delete prefs.devAsFree; recompute(); dropLockedChoices(); savePrefs();
+  toRenderer('store:owned', entitlementList());
+});
+ipcMain.handle('file:export', async (_e, f) => { // Pro: save listening stats etc. through a native Save dialog
+  if (!entitled.has('pro') || !f || typeof f.content !== 'string' || f.content.length > 5e6) return { ok: false };
+  const name = String(f.name || 'export.txt').replace(/[^\w.\- ]/g, '_').slice(0, 80);
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name) });
+  if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+  try { fs.writeFileSync(r.filePath, f.content, 'utf8'); return { ok: true }; } catch { return { ok: false }; }
+});
+ipcMain.handle('pro:status', () => proStatus());
+ipcMain.on('art:rejected', (_e, key) => { if (lastArt && lastArt.key === key) lastArt.rejected = true; }); // the player decided it is a logo, not cover art
+ipcMain.on('screensaver:state', (_e, on) => {
+  if (!entitled.has('pro')) return;
+  ssActive = !!on;
+  if (ssActive && win && !win.isVisible()) { ssHidden = true; win.showInactive(); }  // woke from the tray just for the screensaver
+  if (!ssActive && ssHidden) { ssHidden = false; if (win) win.hide(); }
+});
+ipcMain.on('dev:screensaver', () => { if (devActive) toRenderer('screensaver:request'); });
 ipcMain.on('sleep:set', (_e, mins) => setSleep([0, 15, 30, 60].includes(mins) ? mins : 0));
 ipcMain.on('win:close', () => app.quit());
 ipcMain.on('win:minimize', () => win.hide()); // lives in the tray; click the tray icon to bring it back
@@ -387,8 +539,10 @@ else {
         .catch(() => cb({}));
     });
     createWindow(); createTray(); registerHotkeys(); applyAutostart(); startHelper(); setupUpdater();
+    syncProServices(); startScreensaverWatch();
+    setInterval(() => { recompute(); toRenderer('store:owned', entitlementList()); }, 60 * 60 * 1000); // lets expired keys lapse while the app stays open
   });
-  app.on('before-quit', () => { quitting = true; helper?.kill(); });
+  app.on('before-quit', () => { quitting = true; fader.cancel(); if (discord) discord.stop(); obs.stop(); helper?.kill(); });
   app.on('will-quit', () => globalShortcut.unregisterAll());
   app.on('window-all-closed', () => app.quit());
 }

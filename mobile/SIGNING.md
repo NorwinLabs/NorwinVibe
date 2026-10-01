@@ -49,5 +49,5 @@ Add four repository secrets under **Settings > Secrets and variables > Actions**
 Then delete `keystore.b64`.
 
 The secrets are prefixed `VIBE_` so they can't clash with the NorwinLabsTools ones if you ever share an org-level
-secret store. `mobile-release.yml` fails loudly if `VIBE_KEYSTORE_BASE64` is missing instead of publishing an unsigned
+secret store. The Android job in `release.yml` fails loudly if `VIBE_KEYSTORE_BASE64` is missing instead of publishing an unsigned
 APK, so **add these secrets before merging to main**.

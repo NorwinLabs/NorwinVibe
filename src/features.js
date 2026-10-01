@@ -5,7 +5,7 @@ let P = {};
 let pinned = true;
 
 /* ---------- panels ---------- */
-const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library') };
+const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), eq: $('pop-eq') };
 const closePops = () => Object.values(pops).forEach((p) => p && p.classList.remove('open'));
 function togglePop(name) {
   const open = !pops[name].classList.contains('open');
@@ -21,7 +21,9 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.pop')) close
 const SPEEDS = { slow: 96, relaxed: 126, '33': 200, '45': 270 }; // deg/s: ~16, 21, 33.3 and 45 rpm
 function showPrefs() {
   recordDeg = SPEEDS[P.speed] || SPEEDS.slow;
-  root.dataset.theme = P.theme || 'art';
+  const prevTheme = root.dataset.theme;
+  root.dataset.theme = (typeof effectiveTheme === 'function' && effectiveTheme()) || P.theme || 'art'; // Pro: time-of-day themes override what is shown, not what is saved
+  if (prevTheme && prevTheme !== root.dataset.theme) applyPalette(el.label.classList.contains('art') ? art.data : '');
   root.dataset.record = P.record || 'vinyl';
   root.dataset.bgart = P.bgart || 'cover';
   root.dataset.needle = P.needle || 'classic';
@@ -32,6 +34,8 @@ function showPrefs() {
   document.querySelectorAll('.chips button[data-paid]').forEach((b) => b.classList.toggle('locked', !owns(b.dataset.paid)));
   document.querySelectorAll('.sw[data-pref]').forEach((b) => b.classList.toggle('on', !!P[b.dataset.pref]));
   $('sw-pin').classList.toggle('on', pinned);
+  refreshDev();
+  if (typeof refreshPro === 'function') refreshPro();
 }
 function setPref(k, v) {
   P[k] = v; bridge.setPrefs({ [k]: v }); showPrefs();
@@ -40,9 +44,15 @@ function setPref(k, v) {
 }
 const owns = (id) => (P.owned || []).includes(id);
 document.querySelectorAll('.chips[data-pref] button').forEach((b) => {
-  b.onclick = () => { if (b.dataset.paid && !owns(b.dataset.paid)) { openStore(b.dataset.paid); return; } setPref(b.parentElement.dataset.pref, b.dataset.v); };
+  b.onclick = () => {
+    if (b.dataset.paid && !owns(b.dataset.paid)) { openStore(b.dataset.paid); return; }
+    if (b.parentElement.classList.contains('pro') && !owns('pro')) { openStore('pro'); return; }
+    setPref(b.parentElement.dataset.pref, b.dataset.v);
+  };
 });
-document.querySelectorAll('.sw[data-pref]').forEach((b) => { b.onclick = () => setPref(b.dataset.pref, !P[b.dataset.pref]); });
+document.querySelectorAll('.sw[data-pref]').forEach((b) => {
+  b.onclick = () => { if (b.classList.contains('pro') && !owns('pro')) { openStore('pro'); return; } setPref(b.dataset.pref, !P[b.dataset.pref]); };
+});
 const setPinned = (on, push = true) => { pinned = on; $('sw-pin').classList.toggle('on', on); if (push) bridge.pin(on); };
 $('sw-pin').onclick = () => setPinned(!pinned);
 $('btn-tray').onclick = () => bridge.minimize();
@@ -51,17 +61,17 @@ prefsReady.then((p) => { P = p; pinned = p.pin; sleepEnds = p.sleepEnds || 0; sh
 
 /* ---------- theme store ---------- */
 const STORE_UI = {
+  pro: { blurb: 'Every theme pack, now and in the future, plus the Pro features. One purchase, on both Windows and Android.', parts: ['All theme packs', 'Listening stats', 'Time-of-day themes', 'Sleep fade-out', 'Screensaver', 'OBS overlay', 'Discord status', 'Equalizer & crossfade', 'Playlists', 'Smart shuffle', 'Lock screen & widget'], apply: {} },
   cyberpunk: { blurb: 'Neon-soaked card theme, circuit-etched record, plasma needle and a glitch-wave visualizer.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
     apply: { theme: 'cyberpunk', record: 'cyber', needle: 'cyber', viz: 'cyber' } },
   nightcity: { blurb: 'Dystopian terminal look: black glass, hot red neon lines, glowing cyan light bars, data-grid overlays, scratches and a glitching HUD.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
     apply: { theme: 'nightcity', record: 'nightcity', needle: 'nightcity', viz: 'nightcity' } },
 };
-let storeInfo = { testMode: false, owned: [], items: {} };
+let storeInfo = { owned: [], items: {} };
 const storeMsg = (t) => { $('store-msg').textContent = t || ''; };
 async function renderStore(focus) {
   try { storeInfo = await bridge.storeInfo(); } catch {}
   P.owned = storeInfo.owned; showPrefs();
-  $('store-mode').textContent = storeInfo.testMode ? 'TEST MODE' : '';
   const box = $('store-items'); box.textContent = '';
   for (const [id, it] of Object.entries(storeInfo.items)) {
     const ui = STORE_UI[id] || { blurb: '', parts: [], apply: {} };
@@ -84,11 +94,6 @@ async function renderStore(focus) {
         storeMsg(r.ok ? 'Checkout opened in your browser. After paying, paste the license key you receive below.' : r.error);
       };
       row.appendChild(buy);
-      if (storeInfo.testMode) {
-        const t = document.createElement('button'); t.className = 'act test'; t.textContent = 'Unlock (test)'; t.title = 'Test mode only: unlocks without paying';
-        t.onclick = async () => { const r = await bridge.storeTestUnlock(id); if (r.ok) { hud(`${it.name} unlocked (test)`); renderStore(id); } else storeMsg(r.error); };
-        row.appendChild(t);
-      }
     }
     card.append(prev, name, blurb, parts, row); box.appendChild(card);
   }
@@ -101,9 +106,34 @@ $('btn-store').onclick = (e) => { e.stopPropagation(); openStore(); };
 $('key-redeem').onclick = async () => {
   const key = $('key-in').value.trim(); if (!key) return;
   const r = await bridge.storeRedeem(key);
-  if (r.ok) { $('key-in').value = ''; storeMsg('Unlocked! Thank you.'); hud('Theme pack unlocked'); renderStore(r.item); } else storeMsg(r.error);
+  if (r.ok) { $('key-in').value = ''; storeMsg('Unlocked! Thank you.'); hud('Unlocked'); renderStore(r.item); } else storeMsg(r.error);
 };
-bridge.onOwned((list) => { P.owned = list; showPrefs(); if (pops.store.classList.contains('open')) renderStore(); });
+bridge.onOwned((list) => {
+  P.owned = list;
+  // a licence change can also reset choices that are now locked (e.g. leaving dev mode), so take the saved preferences again
+  const before = P.theme;
+  bridge.prefs().then((p) => { P = p; showPrefs(); if (P.theme !== before) applyPalette(el.label.classList.contains('art') ? art.data : ''); });
+  showPrefs(); if (pops.store.classList.contains('open')) renderStore();
+});
+
+/* ---------- developer panel: only visible while a valid dev key is held ---------- */
+function refreshDev() {
+  const panel = $('dev-panel'), on = owns('dev') && !!bridge.dev;
+  panel.hidden = !on;
+  if (!on) return;
+  bridge.dev.info().then((i) => {
+    if (!i) { panel.hidden = true; return; }
+    $('dev-asfree').classList.toggle('on', !!i.asFree);
+    $('dev-info').textContent = `v${i.version} \u00b7 ${i.packaged ? 'installed' : 'dev run'} \u00b7 Electron ${i.electron || '-'} \u00b7 ${i.licenses} license(s)\n${i.userData || ''}`;
+  });
+}
+if (bridge.dev) {
+  $('dev-asfree').onclick = () => bridge.dev.asFree(!$('dev-asfree').classList.contains('on'));
+  $('dev-tools').onclick = () => bridge.dev.devtools();
+  $('dev-fakeupd').onclick = () => bridge.dev.fakeUpdate();
+  $('dev-ss').onclick = () => bridge.dev.screensaver();
+  $('dev-signout').onclick = () => bridge.dev.signOut();
+}
 
 /* ---------- HUD ---------- */
 let hudTimer;
@@ -325,12 +355,12 @@ function onTrackChange(m, d) {
   const key = m.key;
   setTimeout(() => { // give album art a moment to arrive before notifying
     if (lastKey !== key || !st.playing) return;
-    bridge.toast({ title: d.title, body: d.sub, art: art.key === key ? art.data : '' });
+    bridge.toast({ title: d.title, body: d.sub, art: art.key === key && !artRejected.has(key) ? art.data : '' });
   }, 1200);
 }
 function onArtFeat(m) {
   if (m.key !== lastKey || !curEntry || !m.data) return;
-  makeThumb(m.data).then((t) => { if (!t || curEntry === null || m.key !== lastKey) return; curEntry.thumb = t; saveEntry(curEntry); const f = store.get('nv.favs'); const fe = f.find((e) => e.id === curId); if (fe) { fe.thumb = t; store.set('nv.favs', f); } });
+  isAppIcon(m.data).then((r) => (r.icon ? '' : makeThumb(m.data))).then((t) => { if (!t || curEntry === null || m.key !== lastKey) return; curEntry.thumb = t; saveEntry(curEntry); const f = store.get('nv.favs'); const fe = f.find((e) => e.id === curId); if (fe) { fe.thumb = t; store.set('nv.favs', f); } });
 }
 $('btn-fav').onclick = () => {
   if (!curEntry) return;

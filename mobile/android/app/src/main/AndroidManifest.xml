@@ -31,6 +31,24 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- notification / lock screen / widget buttons -->
+        <receiver
+            android:name=".MediaActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- home-screen widget (Pro) -->
+        <receiver
+            android:name=".NowPlayingWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/now_playing_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

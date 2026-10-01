@@ -1,6 +1,10 @@
 {
-  "testMode": false,
   "items": {
+    "pro": {
+      "name": "NorwinVibe Pro",
+      "price": "$4.99",
+      "checkoutUrl": ""
+    },
     "cyberpunk": {
       "name": "Cyberpunk",
       "price": "$0.99",

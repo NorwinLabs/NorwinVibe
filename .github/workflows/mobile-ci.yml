@@ -1,7 +1,7 @@
 name: Mobile CI
 
 # Verification-only workflow for in-progress work on the Android app. It never signs or publishes anything and never
-# touches version.properties; that only happens on main via mobile-release.yml.
+# touches version.properties; that only happens on main via release.yml.
 on:
   push:
     branches:
@@ -59,7 +59,7 @@ jobs:
       # Cheap syntax check of the UI code shared with the Windows app, so a typo fails here in seconds.
       - name: Check shared UI scripts parse
         run: |
-          for f in ../src/renderer.js ../src/features.js ../src/titles.js src/mobile.js; do
+          for f in ../src/renderer.js ../src/features.js ../src/pro.js ../src/titles.js src/mobile.js; do
             node --check "$f"
           done
 

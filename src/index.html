@@ -132,13 +132,55 @@
     <div class="chips" id="sleep-chips">
       <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
     </div>
+    <div class="pro-block" id="pro-block">
+      <h4>Pro <small id="pro-state"></small></h4>
+      <button class="act" id="btn-stats">Listening stats</button>
+      <button class="sw pro" data-pref="autotheme"><span>Time-of-day themes</span><i></i></button>
+      <div class="auto-row" id="auto-row">
+        <label>Day<select data-pref="autoDay"></select></label>
+        <label>Evening<select data-pref="autoEve"></select></label>
+        <label>Night<select data-pref="autoNight"></select></label>
+      </div>
+      <button class="sw pro" data-pref="fadeout"><span>Fade out when the sleep timer ends</span><i></i></button>
+      <button class="sw pro desk-only" data-pref="screensaver"><span>Screensaver <small>Ambient mode when idle</small></span><i></i></button>
+      <div class="chips pro desk-only" data-pref="ssMin" id="ss-chips"><button data-v="1">1 min</button><button data-v="3">3 min</button><button data-v="5">5 min</button><button data-v="10">10 min</button></div>
+      <button class="sw pro desk-only" data-pref="obs"><span>OBS overlay</span><i></i></button>
+      <p class="hint desk-only" id="obs-url"></p>
+      <button class="sw pro desk-only" data-pref="discord"><span>Discord status</span><i></i></button>
+      <p class="hint desk-only" id="discord-msg"></p>
+      <button class="act mob-only" id="btn-eq">Equalizer &amp; crossfade</button>
+      <button class="sw pro mob-only" data-pref="smartshuffle"><span>Smart shuffle</span><i></i></button>
+    </div>
     <div class="act-row">
       <button class="act" id="btn-full" title="F or F11">Full screen</button>
       <button class="act" id="btn-ambient" title="A">Ambient</button>
     </div>
     <div class="act-row"><button class="act" id="btn-tray">Hide to tray</button><button class="act" id="btn-update">Check for updates</button></div>
     <p class="hint" id="update-msg"></p>
+    <div class="dev-panel" id="dev-panel" hidden>
+      <h4>Developer</h4>
+      <button class="sw" id="dev-asfree"><span>Act as a free user <small>test the locked state</small></span><i></i></button>
+      <div class="act-row"><button class="act" id="dev-tools">DevTools</button><button class="act" id="dev-fakeupd">Fake update</button></div>
+      <div class="act-row"><button class="act" id="dev-ss">Test screensaver</button></div>
+      <p class="hint" id="dev-info"></p>
+      <div class="act-row"><button class="act" id="dev-signout">Turn dev mode off</button></div>
+    </div>
     <p class="hint">Hotkeys: Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+  </div>
+
+  <!-- listening stats (Pro) -->
+  <div class="pop" id="pop-stats">
+    <h4>Listening stats</h4>
+    <div class="stat-hero"><b id="st-hours">0</b><span id="st-hours-label">hours listened</span></div>
+    <div class="stat-row"><div><b id="st-plays">0</b><span>plays</span></div><div><b id="st-songs">0</b><span>songs</span></div><div><b id="st-days">0</b><span>day streak</span></div></div>
+    <h4>Last 7 days</h4>
+    <div class="stat-bars" id="st-bars"></div>
+    <h4>Top songs</h4>
+    <div id="st-top" class="hist"></div>
+    <h4>Top artists</h4>
+    <div id="st-artists" class="hist"></div>
+    <div class="act-row"><button class="act" id="st-csv">Export CSV</button><button class="act" id="st-json">Export JSON</button></div>
+    <div class="act-row"><button class="act" id="st-reset">Reset stats</button></div>
   </div>
 
   <!-- theme store -->
@@ -160,5 +202,6 @@
 <script src="titles.js"></script>
 <script src="renderer.js"></script>
 <script src="features.js"></script>
+<script src="pro.js"></script>
 </body>
 </html>

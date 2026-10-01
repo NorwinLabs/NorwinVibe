@@ -11,7 +11,7 @@ fs.rmSync(www, { recursive: true, force: true });
 fs.mkdirSync(path.join(www, 'vendor'), { recursive: true });
 
 // 1. shared UI code: copied verbatim, so the desktop and phone apps stay in step
-for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
+for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js', 'pro.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
 // 2. phone-only code
 for (const f of ['mobile.js', 'mobile.css']) fs.copyFileSync(path.join(mobile, 'src', f), path.join(www, f));
 // 3. vendored libraries (no CDN at runtime, so the app works offline)
@@ -22,8 +22,6 @@ fs.copyFileSync(require.resolve('tweetnacl/nacl-fast.min.js'), path.join(www, 'v
 const pem = fs.readFileSync(path.join(repo, 'licensing', 'public.pem'), 'utf8').replace(/-----[^-]+-----|\s/g, '');
 const keyHex = Buffer.from(pem, 'base64').subarray(-32).toString('hex');
 const storeCfg = JSON.parse(fs.readFileSync(path.join(repo, 'store.config.json'), 'utf8'));
-if (process.env.VIBE_TESTMODE === '1') storeCfg.testMode = true; // local debug builds only
-if (process.env.VIBE_RELEASE === '1') storeCfg.testMode = false; // release builds never ship the free test unlock
 const verProps = fs.readFileSync(path.join(mobile, 'version.properties'), 'utf8');
 const appVersion = ((verProps.match(/^VERSION_NAME=(.*)$/m) || [])[1] || '').trim();
 fs.writeFileSync(path.join(www, 'config.js'), `window.APP_VERSION=${JSON.stringify(appVersion)};\nwindow.LICENSE_PUBKEY_HEX=${JSON.stringify(keyHex)};\nwindow.STORE_CONFIG=${JSON.stringify(storeCfg)};\n`);
@@ -44,9 +42,21 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
   <div class="pop" id="pop-library">
     <div class="lib-head"><b id="lib-count">Library</b><button class="act" id="lib-add">Add music</button></div>
     <input id="lib-search" type="search" placeholder="Search songs" spellcheck="false" autocomplete="off">
-    <div class="act-row"><button class="act" id="lib-play-all">Play all</button><button class="act" id="lib-shuffle-all">Shuffle</button></div>
+    <div class="chips tabs" id="lib-tabs"><button data-v="songs" class="on">Songs</button><button data-v="lists">Playlists</button></div>
+    <div class="act-row" id="lib-actions"><button class="act" id="lib-play-all">Play all</button><button class="act" id="lib-shuffle-all">Shuffle</button></div>
     <div id="lib-list" class="hist"></div>
     <input type="file" id="lib-file" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac" multiple hidden>
+  </div>
+
+  <!-- equalizer + crossfade (phone, Pro) -->
+  <div class="pop" id="pop-eq">
+    <h4>Equalizer</h4>
+    <button class="sw" id="eq-on"><span>Equalizer</span><i></i></button>
+    <div class="chips" id="eq-presets"></div>
+    <div id="eq-bands"></div>
+    <h4>Crossfade</h4>
+    <div class="vol-row"><input type="range" id="xf" min="0" max="12" step="1" value="0"><span id="xf-n">Off</span></div>
+    <p class="hint">Blends the end of a song into the next one. Songs shorter than about 2.5 times the fade are left alone.</p>
   </div>
 
   <!-- theme store -->`);
