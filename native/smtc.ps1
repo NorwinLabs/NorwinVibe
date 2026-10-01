@@ -61,7 +61,7 @@ $mgr = Await ($mgrType::RequestAsync()) $mgrType
 
 $selected = $null
 $vol = 0.0; $muted = $false; $tick = 0
-$lastKey = ''; $artSent = $false; $artTries = 0
+$lastKey = ''; $artHash = ''; $artTries = 0; $artSince = [DateTime]::UtcNow; $artNext = [DateTime]::UtcNow
 $stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput())
 $readTask = $stdin.ReadLineAsync()
 
@@ -115,17 +115,22 @@ while ($true) {
 
             $app = $s.SourceAppUserModelId
             $key = "$($p.Title)|$($p.Artist)|$($p.AlbumTitle)|$app"
-            if ($key -ne $lastKey) { $lastKey = $key; $artSent = $false; $artTries = 0 }
+            if ($key -ne $lastKey) { $lastKey = $key; $artHash = ''; $artTries = 0; $artSince = [DateTime]::UtcNow; $artNext = $artSince }
 
-            if (-not $artSent -and $artTries -lt 8 -and $null -ne $p.Thumbnail) {
+            # Browsers publish a page's logo first and swap in the real video thumbnail a moment later, so keep looking for a while:
+            # every loop for the first ~6 s, then every 4 s up to 2 minutes. A changed picture is sent again and replaces the old one.
+            $now = [DateTime]::UtcNow
+            if ($null -ne $p.Thumbnail -and $now -ge $artNext -and ($now - $artSince).TotalSeconds -lt 120) {
                 $artTries++
+                $artNext = $now.AddSeconds($(if ($artTries -lt 15) { 0 } else { 4 }))
                 try {
                     $ras = Await ($p.Thumbnail.OpenReadAsync()) $streamType
                     $st = $asStreamForRead.Invoke($null, @($ras)) # (a plain [..]::AsStreamForRead($ras) call cannot bind: $ras is an opaque COM object)
                     $ms = New-Object System.IO.MemoryStream
                     $st.CopyTo($ms); $st.Dispose()
                     $bytes = $ms.ToArray()
-                    if ($bytes.Length -gt 0) {
+                    $h = ''; if ($bytes.Length -gt 0) { $h = [Convert]::ToBase64String([Security.Cryptography.MD5]::Create().ComputeHash($bytes)) }
+                    if ($bytes.Length -gt 0 -and $h -ne $artHash) {
                         # the stream's own ContentType is not reachable either, so identify the image from its first bytes
                         $mime = 'image/jpeg'
                         if ($bytes.Length -gt 3 -and $bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50 -and $bytes[2] -eq 0x4E) { $mime = 'image/png' }
@@ -133,7 +138,7 @@ while ($true) {
                         elseif ($bytes.Length -gt 2 -and $bytes[0] -eq 0x42 -and $bytes[1] -eq 0x4D) { $mime = 'image/bmp' }
                         elseif ($bytes.Length -gt 2 -and $bytes[0] -eq 0x47 -and $bytes[1] -eq 0x49) { $mime = 'image/gif' }
                         Emit @{ type = 'art'; key = $key; data = "data:$mime;base64," + [Convert]::ToBase64String($bytes) }
-                        $artSent = $true
+                        $artHash = $h
                     }
                 } catch { [Console]::Error.WriteLine("thumbnail: $($_.Exception.Message)") }
             }

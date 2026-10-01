@@ -25,7 +25,6 @@ body.mobile { padding: 0; height: 100%; }
 .mobile .knob { top: 17px; transform: scale(1); width: 14px; height: 14px; }
 .mobile .time { font-size: 12px; }
 .mobile .ctl { width: 46px; height: 46px; }
-.mobile .ctl.small { width: 40px; height: 40px; }
 .mobile .ctl.tiny { width: 36px; height: 36px; }
 .mobile .ctl.play { width: 70px; height: 70px; }
 .mobile .ctl.play svg { width: 32px; height: 32px; }

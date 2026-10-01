@@ -22,6 +22,17 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
 .bg { position: absolute; inset: -40px; background: center / cover; filter: blur(46px) saturate(1.5); opacity: 0; transition: opacity 1s; transform: scale(1.2); }
 .bg.on { opacity: .75; }
+/* live wallpaper: shown when a song has no usable picture. Soft blobs of the song's own colours drift slowly. */
+.wall { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity 1.2s; pointer-events: none; }
+.wall.on { opacity: 1; }
+.wall i { position: absolute; width: 90%; aspect-ratio: 1; border-radius: 50%; filter: blur(48px); opacity: .75; will-change: transform; }
+.wall i:nth-child(1) { left: -25%; top: -20%; background: radial-gradient(circle, var(--accent), transparent 68%); animation: wall1 19s ease-in-out infinite alternate; }
+.wall i:nth-child(2) { right: -30%; bottom: -15%; background: radial-gradient(circle, var(--accent-2), transparent 68%); animation: wall2 23s ease-in-out infinite alternate; }
+.wall i:nth-child(3) { left: 15%; top: 30%; width: 70%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 55%, var(--accent-2)), transparent 68%); opacity: .55; animation: wall3 29s ease-in-out infinite alternate; }
+@keyframes wall1 { to { transform: translate(55%, 40%) scale(1.25) rotate(40deg); } }
+@keyframes wall2 { to { transform: translate(-50%, -45%) scale(1.15) rotate(-30deg); } }
+@keyframes wall3 { 50% { transform: translate(-35%, 30%) scale(1.3); } to { transform: translate(30%, -35%) scale(.9); } }
+@media (prefers-reduced-motion: reduce) { .wall i { animation: none; } }
 .bg-tint { position: absolute; inset: 0;
   background:
     radial-gradient(120% 70% at 20% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 70%),
@@ -114,7 +125,6 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .ctl svg { width: 24px; height: 24px; }
 .ctl svg .solid { fill: currentColor; }
 .ctl svg text { fill: currentColor; stroke: none; font: 700 7.5px "Segoe UI", sans-serif; }
-.ctl.small { width: 38px; height: 38px; color: var(--muted); }
 .ctl:hover { background: rgba(255,255,255,.1); }
 .ctl:active { transform: scale(.86); }
 .ctl:disabled { opacity: .3; pointer-events: none; }
@@ -136,7 +146,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr auto; grid-template-areas: "stage meta controls" "stage progress progress";
   align-items: center; column-gap: 14px; padding: 12px 14px 10px 14px; border-radius: 24px; }
 .mini .card > .top { position: absolute; top: 4px; right: 8px; height: 20px; z-index: 3; }
-.mini .source, .mini .small, .mini .arm, .mini .glow, .mini .time { display: none; }
+.mini .source, .mini .arm, .mini .glow, .mini .time { display: none; }
 .mini .wbtn { width: 22px; height: 22px; } .mini .wbtn svg { width: 12px; height: 12px; }
 .mini .stage { grid-area: stage; }
 .mini .vinyl-wrap { width: 76px; height: 76px; transform: none; }
@@ -178,7 +188,6 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .ctl.tiny.track .one { display: block; }
 .controls { gap: 2px; }
 .ctl { width: 40px; height: 40px; }
-.ctl.small { width: 34px; height: 34px; }
 .ctl.play { width: 58px; height: 58px; margin: 0 4px; }
 .mini .tiny { display: none; }
 .mini .viz { left: -6px; top: -6px; width: 88px; height: 88px; }

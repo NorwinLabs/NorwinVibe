@@ -328,10 +328,10 @@ function makeThumb(dataUrl) {
   return new Promise((res) => {
     const i = new Image();
     i.onload = () => {
-      const c = document.createElement('canvas'); c.width = c.height = 56;
+      const c = document.createElement('canvas'); c.width = c.height = 96;
       const s = Math.min(i.naturalWidth, i.naturalHeight), x = c.getContext('2d');
-      x.drawImage(i, (i.naturalWidth - s) / 2, (i.naturalHeight - s) / 2, s, s, 0, 0, 56, 56);
-      res(c.toDataURL('image/jpeg', .7));
+      x.drawImage(i, (i.naturalWidth - s) / 2, (i.naturalHeight - s) / 2, s, s, 0, 0, 96, 96);
+      res(c.toDataURL('image/jpeg', .78));
     };
     i.onerror = () => res(''); i.src = dataUrl;
   });
@@ -360,7 +360,7 @@ function onTrackChange(m, d) {
 }
 function onArtFeat(m) {
   if (m.key !== lastKey || !curEntry || !m.data) return;
-  isAppIcon(m.data).then((r) => (r.icon ? '' : makeThumb(m.data))).then((t) => { if (!t || curEntry === null || m.key !== lastKey) return; curEntry.thumb = t; saveEntry(curEntry); const f = store.get('nv.favs'); const fe = f.find((e) => e.id === curId); if (fe) { fe.thumb = t; store.set('nv.favs', f); } });
+  isAppIcon(m.data).then((r) => (r.icon ? '' : makeThumb(m.data))).then((t) => { if (!t || curEntry === null || m.key !== lastKey) return; curEntry.thumb = t; saveEntry(curEntry); const f = store.get('nv.favs'); const fe = f.find((e) => e.id === curId); if (fe) { fe.thumb = t; store.set('nv.favs', f); } if (pops.history.classList.contains('open')) renderHistory(); });
 }
 $('btn-fav').onclick = () => {
   if (!curEntry) return;
@@ -463,5 +463,20 @@ if (bridge.onUpdate) {
   bridge.onUpdate(showVersion);
   bridge.updateState().then((u) => { if (u && u.state !== 'idle') showVersion(u); });
   verEl.onclick = () => { if (creditEl.classList.contains('update')) bridge.updateInstall(); };
-  $('btn-update').onclick = () => { bridge.updateCheck().then(showVersion); };
+  const updBtn = $('btn-update');
+  const label = { checking: 'Checking…', none: 'Up to date ✓', downloading: 'Downloading…', ready: 'Update ready', error: 'Check failed', unsupported: 'Installed app only' };
+  let labelTimer = 0;
+  bridge.onUpdate((u) => {
+    if (!u || !label[u.state]) return;
+    updBtn.textContent = label[u.state];
+    clearTimeout(labelTimer);
+    if (u.state === 'none' || u.state === 'error') labelTimer = setTimeout(() => { updBtn.textContent = 'Check for updates'; }, 4000);
+  });
+  updBtn.onclick = () => {
+    updBtn.textContent = 'Checking…';
+    bridge.updateCheck().then((u) => {
+      showVersion(u);
+      if (u && u.state === 'unsupported') { updBtn.textContent = label.unsupported; clearTimeout(labelTimer); labelTimer = setTimeout(() => { updBtn.textContent = 'Check for updates'; }, 4000); }
+    });
+  };
 } else { $('btn-update').style.display = 'none'; }

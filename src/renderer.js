@@ -1,9 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const el = {
-  card: $('card'), bg: $('bg'), vinyl: $('vinyl'), label: $('label'), meta: $('meta'),
+  card: $('card'), bg: $('bg'), wall: $('wall'), vinyl: $('vinyl'), label: $('label'), meta: $('meta'),
   title: $('title'), artist: $('artist'), source: $('source'),
   bar: $('bar'), fill: $('fill'), knob: $('knob'), cur: $('t-cur'), dur: $('t-dur'),
-  prev: $('btn-prev'), next: $('btn-next'), play: $('btn-play'), back: $('btn-back'), fwd: $('btn-fwd'),
+  prev: $('btn-prev'), next: $('btn-next'), play: $('btn-play'),
   mini: $('btn-mini'), shuffle: $('btn-shuffle'), repeat: $('btn-repeat'),
   srcBtn: $('source-btn'), menu: $('menu'), viz: $('viz'),
 };
@@ -144,7 +144,7 @@ function applyPalette(dataUrl) {
 function showNoArt() { // blank background + a colour of its own for this song
   artWide = false;
   el.label.classList.remove('art'); el.label.style.backgroundImage = '';
-  el.bg.style.backgroundImage = ''; el.bg.classList.remove('on');
+  el.bg.style.backgroundImage = ''; el.bg.classList.remove('on'); el.wall.classList.add('on');
   applyPalette('');
 }
 function showArt(data) {
@@ -155,7 +155,7 @@ function showArt(data) {
     if (token !== artCheckToken) return; // another song arrived while checking
     artPending = '';
     if (r.icon) { artRejected.add(key); if (artRejected.size > 300) artRejected.clear(); if (bridge.artRejected) bridge.artRejected(key); showNoArt(); return; }
-    artWide = false;
+    artRejected.delete(key); artWide = false; el.wall.classList.remove('on');
     const i = new Image(); i.onload = () => { artWide = i.naturalWidth / i.naturalHeight > 1.5; if (st.active) el.source.textContent = sourceLabel(st); }; i.src = data;
     el.label.classList.add('art'); el.label.style.backgroundImage = `url("${data}")`;
     el.bg.style.backgroundImage = `url("${data}")`; el.bg.classList.add('on');
@@ -217,7 +217,6 @@ function onState(m) {
   el.next.disabled = !m.active || m.canNext === false;
   const seekable = m.active && m.canSeek && st.dur > 0;
   el.bar.classList.toggle('off', !seekable);
-  el.back.disabled = el.fwd.disabled = !seekable;
   el.shuffle.classList.toggle('on', !!m.shuffle);
   el.shuffle.disabled = !m.active || !m.canShuffle;
   el.repeat.classList.toggle('on', m.repeat === 'List' || m.repeat === 'Track');
@@ -249,14 +248,12 @@ el.next.onclick = () => send('next');
 el.shuffle.onclick = () => send(`shuffle:${st.shuffle ? 0 : 1}`);
 el.repeat.onclick = () => send(`repeat:${{ None: 'List', List: 'Track', Track: 'None' }[st.repeat] || 'List'}`);
 const seekTo = (s) => { s = Math.max(0, Math.min(st.dur || s, s)); st.pos = s; recvAt = performance.now(); send(`seek:${s.toFixed(2)}`); };
-el.back.onclick = () => seekTo(livePos() - 10);
-el.fwd.onclick = () => seekTo(livePos() + 10);
 
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'Space') { e.preventDefault(); el.play.click(); }
-  else if (e.code === 'ArrowLeft') el.back.click();
-  else if (e.code === 'ArrowRight') el.fwd.click();
+  else if (e.code === 'ArrowLeft' && st.canSeek) seekTo(livePos() - 10); // keyboard still jumps 10 seconds
+  else if (e.code === 'ArrowRight' && st.canSeek) seekTo(livePos() + 10);
   else if (e.code === 'ArrowUp') el.next.click();
   else if (e.code === 'ArrowDown') el.prev.click();
 });

@@ -5,7 +5,7 @@
 html[data-theme="midnight"] { --accent: #7dd3fc; --accent-2: #a78bfa; }
 html[data-theme="retro"]    { --accent: #e8a33d; --accent-2: #c2571a; }
 html[data-theme="neon"]     { --accent: #22d3ee; --accent-2: #f472b6; }
-html:not([data-theme="art"]) .bg { display: none; }
+html:not([data-theme="art"]) .bg, html:not([data-theme="art"]) .wall { display: none; }
 html[data-theme="midnight"] .card { background: #0a0d18; }
 html[data-theme="midnight"] .bg-tint { background: radial-gradient(110% 60% at 50% 0%, rgba(125,211,252,.16), transparent 70%), linear-gradient(180deg, #0f1424, #070910); }
 html[data-theme="retro"] .card { background: repeating-linear-gradient(90deg, #3d2412 0 4px, #4a2d17 4px 9px, #402714 9px 12px); }
@@ -351,7 +351,7 @@ html[data-bgart="cover"] .bg.on { opacity: 1; }
 html[data-theme="art"][data-bgart="cover"] .bg-tint { background:
   radial-gradient(120% 60% at 15% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
   linear-gradient(180deg, rgba(10,10,16,calc(var(--veil-a, .45) * .28)) 0%, rgba(10,10,16,calc(var(--veil-a, .45) * .5)) 34%, rgba(10,10,16,calc(var(--veil-b, .82) * .93)) 100%); }
-html[data-bgart="off"] .bg { display: none; }
+html[data-bgart="off"] .bg, html[data-bgart="off"] .wall { display: none; }
 .credit .ver:empty::before { display: none; }
 
 /* ---------- developer panel ---------- */
