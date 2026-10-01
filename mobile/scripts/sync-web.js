@@ -36,11 +36,11 @@ sub('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="viewport" con
 sub('<link rel="stylesheet" href="features.css">', '<link rel="stylesheet" href="features.css">\n<link rel="stylesheet" href="mobile.css">');
 sub('<body>', '<body class="mobile">');
 sub('Play something in Spotify, your browser, or any media app', 'Add music from your phone to get started');
-sub('    <div class="lyric" id="lyric"></div>', '    <div class="lyric" id="lyric"></div>\n    <button class="act" id="btn-add-cta">Add music</button>');
+sub('    <div class="lyric" id="lyric"></div>', '    <div class="lyric" id="lyric"></div>\n    <button class="act" id="btn-add-cta">Find my music</button>');
 sub('      <button class="wbtn" id="btn-fav"', '      <button class="wbtn" id="btn-library" title="Music library" aria-label="Music library"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 18a3 3 0 11-3-3 3 3 0 013 3zm11-2a3 3 0 11-3-3 3 3 0 013 3z"/></svg></button>\n      <button class="wbtn" id="btn-fav"');
 sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
   <div class="pop" id="pop-library">
-    <div class="lib-head"><b id="lib-count">Library</b><button class="act" id="lib-add">Add music</button></div>
+    <div class="lib-head"><b id="lib-count">Library</b><span class="lib-btns"><button class="act" id="lib-add">Find my music</button><button class="act" id="lib-pick" title="Add individual files">Add files</button></span></div>
     <input id="lib-search" type="search" placeholder="Search songs" spellcheck="false" autocomplete="off">
     <div class="chips tabs" id="lib-tabs"><button data-v="songs" class="on">Songs</button><button data-v="lists">Playlists</button></div>
     <div class="act-row" id="lib-actions"><button class="act" id="lib-play-all">Play all</button><button class="act" id="lib-shuffle-all">Shuffle</button></div>

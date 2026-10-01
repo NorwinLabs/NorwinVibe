@@ -124,6 +124,47 @@
     sortLib(); toast(added ? `Added ${added} song${added === 1 ? '' : 's'}` : 'Those songs are already in your library');
     renderLibrary(); if (order.length === 0 || added) buildOrder(cur && cur.id);
   }
+  /* ---- scan the phone: songs found this way are only indexed here (no copy); the file is read when played ---- */
+  const scanner = plugin('MusicScan');
+  const fileUrl = (path) => (cap && cap.convertFileSrc ? cap.convertFileSrc('file://' + path) : path);
+  async function getBlob(t) { // the audio bytes for a track
+    if (t.path) { const r = await fetch(fileUrl(t.path)); if (!r.ok) throw new Error('missing'); return r.blob(); }
+    const rec = await dbDo('blobs', 'readonly', (s) => s.get(t.id)); if (!rec) throw new Error('missing'); return rec.blob;
+  }
+  const splitName = (base) => { const m = base.replace(/\.[^.]+$/, '').replace(/_/g, ' ').trim().split(/\s+-\s+/); return m.length >= 2 ? { artist: m[0], title: m.slice(1).join(' - ') } : { artist: '', title: m[0] }; };
+  const known = (v) => (v && v !== '<unknown>' ? String(v).trim() : '');
+  let scanning = false;
+  async function scanPhone(prompt) {
+    if (!scanner || scanning) { if (!scanner && prompt) toast('Scanning only works in the phone app'); return; }
+    scanning = true; if (prompt) toast('Looking for music on your phone\u2026');
+    try {
+      await libReady;
+      const res = await scanner.scan({ prompt: !!prompt });
+      if (!res.granted) { if (prompt) toast(res.denied ? 'Allow music access to find your songs' : 'Music access needed'); return; }
+      const found = res.tracks || [], paths = new Set(found.map((x) => x.path)), have = new Map(lib.filter((t) => t.path).map((t) => [t.path, t]));
+      const fresh = found.filter((x) => !have.has(x.path)).map((x) => {
+        const fb = splitName(x.name || x.path.split('/').pop());
+        return { id: 'p:' + x.path, path: x.path, name: x.name, size: x.size, type: '', title: known(x.title) || fb.title, artist: known(x.artist) || fb.artist, album: known(x.album), dur: x.dur || 0, art: '', added: Date.now() };
+      });
+      const gone = lib.filter((t) => t.path && !paths.has(t.path)); // deleted from the phone since the last scan
+      if (fresh.length || gone.length) {
+        await dbMulti(['meta', 'blobs'], (m, b) => { fresh.forEach((r) => m.put(r)); gone.forEach((r) => { m.delete(r.id); b.delete(r.id); }); });
+        const goneIds = new Set(gone.map((t) => t.id));
+        lib = lib.filter((t) => !goneIds.has(t.id)).concat(fresh); sortLib();
+        playlists.forEach((p) => { p.ids = p.ids.filter((x) => !goneIds.has(x)); }); if (gone.length) savePlaylists();
+        buildOrder(cur && cur.id); renderLibrary();
+      }
+      if (prompt) toast(found.length ? `Found ${found.length} song${found.length === 1 ? '' : 's'} on your phone${fresh.length ? ` (${fresh.length} new)` : ''}` : 'No music found on this phone');
+    } catch { if (prompt) toast('Could not scan for music'); }
+    finally { scanning = false; }
+  }
+  async function lazyArt(t, blob) { // scanned songs have no cover yet: read it from the file the first time it plays
+    if (t.art || t.artTried || !t.path) return; t.artTried = true;
+    const tags = await readTags(blob); if (!tags.picture) return;
+    const art = await thumb(tags.picture); if (!art) return;
+    t.art = art; dbDo('meta', 'readwrite', (s) => s.put(Object.assign({}, t, { artTried: undefined }))).catch(() => {});
+    if (cur && cur.id === t.id) emitArt();
+  }
   async function removeTrack(id) {
     await dbMulti(['meta', 'blobs'], (m, b) => { m.delete(id); b.delete(id); });
     lib = lib.filter((t) => t.id !== id);
@@ -205,12 +246,12 @@
 
   async function loadTrack(id, autoplay) {
     const t = lib.find((x) => x.id === id); if (!t) return;
-    const rec = await dbDo('blobs', 'readonly', (s) => s.get(id)); if (!rec) { toast('That file is missing'); return; }
+    let blob; try { blob = await getBlob(t); } catch { toast('That file is missing'); return; }
     xfading = false;
     decks.forEach((d, i) => { if (i !== active) d.pause(); });
     if (ensureGraph()) { deckGain.forEach((g, i) => { g.gain.cancelScheduledValues(0); g.gain.value = i === active ? 1 : 0; }); await resumeCtx(); }
-    setDeckSrc(active, rec.blob); cur = t; idx = order.indexOf(id);
-    emitArt(); setSession();
+    setDeckSrc(active, blob); cur = t; idx = order.indexOf(id);
+    emitArt(); setSession(); lazyArt(t, blob);
     if (autoplay) { try { await audio.play(); startBackground(); } catch { toast('Tap play to start'); } }
     emit(); pushNative(true);
   }
@@ -235,17 +276,17 @@
     const t = lib.find((x) => x.id === nextId); if (!t) return;
     xfading = true;
     try {
-      const rec = await dbDo('blobs', 'readonly', (s) => s.get(nextId)); if (!rec || !ensureGraph()) { xfading = false; return; }
+      const blob = await getBlob(t).catch(() => null); if (!blob || !ensureGraph()) { xfading = false; return; }
       await resumeCtx();
       const oldDeck = active, other = 1 - active, secs = fx.xfade, now = ctx.currentTime;
-      setDeckSrc(other, rec.blob); decks[other].currentTime = 0;
+      setDeckSrc(other, blob); decks[other].currentTime = 0;
       deckGain[other].gain.cancelScheduledValues(now); deckGain[other].gain.setValueAtTime(0, now);
       await decks[other].play();
       const t0 = ctx.currentTime;
       deckGain[oldDeck].gain.cancelScheduledValues(t0); deckGain[oldDeck].gain.setValueAtTime(deckGain[oldDeck].gain.value, t0); deckGain[oldDeck].gain.linearRampToValueAtTime(0, t0 + secs);
       deckGain[other].gain.linearRampToValueAtTime(1, t0 + secs);
       idx = order.indexOf(nextId); cur = t; useDeck(other);       // the new song is "current" straight away
-      emitArt(); setSession(); emit(); pushNative(true);
+      emitArt(); setSession(); emit(); pushNative(true); lazyArt(t, blob);
       setTimeout(() => { decks[oldDeck].pause(); xfading = false; }, secs * 1000 + 150);
     } catch { xfading = false; }
   }
@@ -434,7 +475,7 @@
     const q = (searchEl.value || '').trim().toLowerCase();
     const rows = q ? lib.filter((t) => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q)) : lib;
     listEl.textContent = '';
-    if (!rows.length) return empty(lib.length ? 'No matches' : 'Tap "Add music" and pick songs from your phone');
+    if (!rows.length) return empty(lib.length ? 'No matches' : 'Tap "Find my music" to add the songs on your phone');
     for (const t of rows) {
       const row = songRow(t, [
         iconBtn('Add to a playlist', ICON_PLUS, () => pickPlaylist(t.id)),
@@ -511,13 +552,14 @@
   const tabsEl = $('lib-tabs');
   if (tabsEl) tabsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { libTab = b.dataset.v; openList = null; renderLibrary(); }; });
   $('btn-library').onclick = (e) => { e.stopPropagation(); togglePop('library'); renderLibrary(); };
-  $('btn-add-cta').onclick = () => fileIn.click();
-  $('lib-add').onclick = () => fileIn.click();
+  $('btn-add-cta').onclick = () => (scanner ? scanPhone(true) : fileIn.click());
+  $('lib-add').onclick = () => (scanner ? scanPhone(true) : fileIn.click());
+  $('lib-pick').onclick = () => fileIn.click(); // still possible to add single files, e.g. from a folder the scan does not cover
   fileIn.onchange = () => { const picked = [...fileIn.files]; fileIn.value = ''; if (picked.length) addFiles(picked); }; // copy first: the FileList is live and clearing the input empties it
   searchEl.oninput = renderLibrary;
   $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
   $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
-  libReady.then(() => { buildOrder(); renderLibrary(); });
+  libReady.then(() => { buildOrder(); renderLibrary(); scanPhone(false); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */
@@ -545,6 +587,7 @@
   card.addEventListener('dblclick', (e) => e.stopImmediatePropagation(), true); // no mini mode on a phone
   const status = plugin('StatusBar'); if (status) { status.setBackgroundColor?.({ color: '#0c0c12' }).catch(() => {}); status.setStyle?.({ style: 'DARK' }).catch(() => {}); }
   const app = plugin('App');
+  if (app && app.addListener) app.addListener('appStateChange', (st) => { if (st && st.isActive) scanPhone(false); }); // pick up songs added while the app was in the background
   if (app && app.addListener) app.addListener('backButton', () => { // close panels / leave ambient first, otherwise send the app to the background (music keeps playing)
     const open = document.querySelector('.pop.open');
     if (open) { open.classList.remove('open'); return; }
