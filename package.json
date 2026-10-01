@@ -1,0 +1,69 @@
+{
+  "name": "norwinvibe",
+  "version": "1.0.0",
+  "description": "Floating media player that auto-detects whatever is playing on Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64 --publish never",
+    "dist:dir": "electron-builder --win dir --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "author": "NorwinLabs",
+  "homepage": "https://github.com/NorwinLabs/NorwinVibe",
+  "build": {
+    "appId": "com.norwinlabs.vibe.desktop",
+    "productName": "NorwinVibe",
+    "copyright": "NorwinLabs",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "src/**/*",
+      "native/**/*",
+      "assets/**/*",
+      "licensing/public.pem",
+      "store.config.json"
+    ],
+    "asarUnpack": [
+      "native/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NorwinVibe",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "NorwinVibe-Setup.exe"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/NorwinLabs/NorwinVibe/releases/download/desktop-latest"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  }
+}

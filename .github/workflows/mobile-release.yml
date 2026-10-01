@@ -1,0 +1,136 @@
+name: Mobile Build and Release
+
+# Builds the signed Android APK and publishes it as a GitHub Release, the same flow as NorwinLabsTools.
+# The Windows app is untouched by this workflow.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/**'
+      - 'src/**'
+      - 'licensing/public.pem'
+      - 'store.config.json'
+      - '.github/workflows/mobile-release.yml'
+  # Lets a release be re-run after adding or rotating the signing secrets, without needing an empty commit to main.
+  workflow_dispatch:
+
+# Two releases must never race to bump the same version file.
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # The release keystore is never in the repository. It is restored from a repository secret for the length of
+      # this job and deleted afterwards. See mobile/SIGNING.md.
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VIBE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::VIBE_KEYSTORE_BASE64 is not set. Add the signing secrets (see mobile/SIGNING.md) before releasing;"
+            echo "::error::without them the APK would be unsigned and could not be installed as an update."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vibe-release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/vibe-release.jks" >> "$GITHUB_ENV"
+
+      # Bump the build number for this release. It is committed back below so numbers keep increasing.
+      - name: Bump version code
+        run: |
+          CODE=$(grep '^VERSION_CODE' version.properties | tr -d '\r' | cut -d'=' -f2)
+          NEW=$((CODE + 1))
+          sed -i "s/^VERSION_CODE=.*/VERSION_CODE=$NEW/" version.properties
+          echo "Build number $CODE -> $NEW"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        env:
+          VIBE_RELEASE: '1'   # turns off the theme-store test unlock in the shipped app
+        run: npm run build:web
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build release APK
+        working-directory: mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.VIBE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VIBE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VIBE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Get version info
+        id: get_version
+        run: |
+          VERSION_NAME=$(grep '^VERSION_NAME' version.properties | tr -d '\r' | cut -d'=' -f2)
+          VERSION_CODE=$(grep '^VERSION_CODE' version.properties | tr -d '\r' | cut -d'=' -f2)
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/*.apk "dist/NorwinVibe-${VERSION_NAME}-b${VERSION_CODE}.apk"
+
+      # Persist the bump, otherwise the next push starts from the same number and the "latest" release never advances.
+      - name: Commit version bump
+        run: |
+          if git diff --quiet -- version.properties; then
+            echo "version.properties unchanged, nothing to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add version.properties
+            git commit -m "chore(mobile): bump version to ${{ steps.get_version.outputs.version_name }} (build ${{ steps.get_version.outputs.version_code }}) [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vibe-release.jks"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-v${{ steps.get_version.outputs.version_name }}-b${{ steps.get_version.outputs.version_code }}
+          name: NorwinVibe Mobile v${{ steps.get_version.outputs.version_name }} (Build ${{ steps.get_version.outputs.version_code }})
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          make_latest: 'false'   # the repo's "latest" release belongs to the Windows app
+          files: |
+            mobile/dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

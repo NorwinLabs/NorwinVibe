@@ -1,0 +1,54 @@
+/* Phone layout: the desktop card becomes a full-screen portrait player. Loaded after features.css. */
+html { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #0c0c12; }
+body.mobile { padding: 0; height: 100%; }
+.mobile .card { border-radius: 0; box-shadow: none; clip-path: none; animation: none; padding: 12px 20px calc(18px + env(safe-area-inset-bottom, 0px)); }
+
+/* things that only make sense with a mouse / a desktop window */
+.mobile #btn-mini, .mobile #btn-close, .mobile #btn-full, .mobile #btn-tray, .mobile #sw-pin, .mobile .hint,
+.mobile .sw[data-pref="snap"], .mobile .sw[data-pref="autostart"], .mobile .sw[data-pref="fade"], .mobile .sw[data-pref="toasts"] { display: none !important; }
+.mobile .win-btns { opacity: 1; }
+.mobile .wbtn { width: 38px; height: 38px; }
+.mobile .wbtn svg { width: 19px; height: 19px; }
+.mobile .top { height: 40px; }
+
+/* record + needle, scaled to the screen (--ms is set from the screen width) */
+.mobile .stage { width: 296px; height: 236px; margin: calc((var(--ms, 1) - 1) * 125px) auto; align-self: center; justify-self: center; transform: scale(var(--ms, 1)); transform-origin: center; }
+.mobile .vinyl, .mobile .arm-rod, .mobile .arm-head { touch-action: none; }
+.mobile .title { font-size: 22px; }
+.mobile .artist { font-size: 14px; }
+.mobile .lyric { font-size: 14px; min-height: 24px; }
+
+/* bigger touch targets */
+.mobile .bar { height: 34px; touch-action: none; }
+.mobile .bar::before, .mobile .fill { top: 15px; }
+.mobile .bar:hover::before, .mobile .bar:hover .fill, .mobile .bar.drag::before, .mobile .bar.drag .fill { top: 14px; }
+.mobile .knob { top: 17px; transform: scale(1); width: 14px; height: 14px; }
+.mobile .time { font-size: 12px; }
+.mobile .ctl { width: 46px; height: 46px; }
+.mobile .ctl.small { width: 40px; height: 40px; }
+.mobile .ctl.tiny { width: 36px; height: 36px; }
+.mobile .ctl.play { width: 70px; height: 70px; }
+.mobile .ctl.play svg { width: 32px; height: 32px; }
+.mobile .controls { margin-top: 10px; gap: 4px; }
+
+/* panels become bottom-friendly sheets */
+.mobile .card > .pop { left: 12px; right: 12px; top: 56px; width: auto; max-height: calc(100% - 76px); }
+.mobile .chips button, .mobile .act { padding: 10px 6px; }
+.mobile .sw { padding: 11px 4px; }
+
+/* library */
+.lib-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.lib-head b { font-size: 15px; }
+.lib-head .act { flex: none; padding: 8px 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 60%, transparent), color-mix(in srgb, var(--accent-2) 60%, transparent)); }
+#lib-search { width: 100%; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; border: 0; outline: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.35); color: #fff; font: inherit; font-size: 14px; -webkit-user-select: text; user-select: text; }
+#lib-search:focus { outline-color: var(--accent); }
+#lib-list { max-height: 48vh; overflow-y: auto; }
+.hrow.now { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.hrow .th { width: 42px; height: 42px; }
+.hrow b { font-size: 14px; } .hrow span { font-size: 12px; }
+
+/* first-run call to action */
+#btn-add-cta { display: none; margin: 14px auto 0; padding: 13px 26px; font-size: 14px; border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, transparent), color-mix(in srgb, var(--accent-2) 70%, transparent)); }
+.mobile .card.idle #btn-add-cta { display: block; }
+.mobile .card.idle .lyric { display: none; }

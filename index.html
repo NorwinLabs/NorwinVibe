@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'">
+<title>NorwinVibe</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="features.css">
+</head>
+<body>
+<div class="card idle" id="card">
+  <div class="bg" id="bg"></div>
+  <div class="bg-tint"></div>
+  <div class="aurora"><i></i><i></i><i></i></div>
+
+  <header class="top">
+    <button class="source" id="source-btn" title="Choose media source">
+      <span class="eq" id="eq"><i></i><i></i><i></i><i></i></span>
+      <span id="source">No source</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="menu" id="menu"></div>
+    <div class="win-btns">
+      <button class="wbtn" id="btn-fav" title="Favourite this song" aria-label="Favourite"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8z"/></svg></button>
+      <button class="wbtn" id="btn-history" title="History &amp; favourites" aria-label="History"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+      <button class="wbtn" id="btn-settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+      <button class="wbtn" id="hdr-ambient" title="Ambient mode (A)" aria-label="Ambient mode"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></button>
+      <button class="wbtn" id="hdr-full" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="wbtn" id="btn-mini" title="Mini mode" aria-label="Mini mode"><svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg></button>
+      <button class="wbtn close" id="btn-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </header>
+
+  <section class="stage" id="stage">
+    <div class="vinyl-wrap">
+      <canvas class="viz" id="viz" width="544" height="544"></canvas>
+      <div class="glow"></div>
+      <div class="vinyl" id="vinyl" title="Drag to scrub">
+        <div class="grooves"></div>
+        <div class="label" id="label"><svg class="note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 18a3 3 0 11-3-3 3 3 0 013 3zm11-2a3 3 0 11-3-3 3 3 0 013 3z"/></svg></div>
+        <div class="hole"></div>
+      </div>
+      <div class="sheen"></div>
+    </div>
+    <div class="arm" id="arm">
+      <div class="arm-base"></div>
+      <div class="arm-rod"></div>
+      <div class="arm-head"><i class="arm-tip"></i></div>
+    </div>
+  </section>
+
+  <section class="meta" id="meta">
+    <div class="title"><span id="title">Nothing playing</span></div>
+    <div class="artist" id="artist">Play something in Spotify, your browser, or any media app</div>
+    <div class="lyric" id="lyric"></div>
+  </section>
+
+  <section class="lyrics" id="lyrics"></section>
+
+  <section class="progress">
+    <span class="time" id="t-cur">0:00</span>
+    <div class="bar off" id="bar"><div class="fill" id="fill"></div><div class="knob" id="knob"></div></div>
+    <span class="time right" id="t-dur">0:00</span>
+  </section>
+
+  <section class="controls">
+    <button class="ctl tiny" id="btn-shuffle" title="Shuffle" aria-label="Shuffle">
+      <svg viewBox="0 0 24 24"><path d="M3 6h3c5 0 7 12 12 12h3M18 15l3 3-3 3M3 18h3c1.5 0 2.7-.8 3.7-2M14.3 8C15.3 6.8 16.5 6 18 6h3M18 3l3 3-3 3"/></svg>
+    </button>
+    <button class="ctl small" id="btn-back" title="Back 10s (Left)" aria-label="Back 10 seconds">
+      <svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 11-6 6"/><text x="12" y="17.5" text-anchor="middle">10</text></svg>
+    </button>
+    <button class="ctl" id="btn-prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5v14l-10-7z" class="solid"/></svg></button>
+    <button class="ctl play" id="btn-play" title="Play / Pause (Space)" aria-label="Play or pause">
+      <svg viewBox="0 0 24 24" class="ico-play"><path d="M8 5v14l11-7z"/></svg>
+      <svg viewBox="0 0 24 24" class="ico-pause"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+    </button>
+    <button class="ctl" id="btn-next" title="Next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5v14l10-7z" class="solid"/></svg></button>
+    <button class="ctl small" id="btn-fwd" title="Forward 10s (Right)" aria-label="Forward 10 seconds">
+      <svg viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 106 6"/><text x="12" y="17.5" text-anchor="middle">10</text></svg>
+    </button>
+    <button class="ctl tiny" id="btn-repeat" title="Repeat" aria-label="Repeat">
+      <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/><text x="12" y="14.8" text-anchor="middle" class="one">1</text></svg>
+    </button>
+  </section>
+
+  <div class="hud" id="hud"></div>
+
+  <!-- settings -->
+  <div class="pop" id="pop-settings">
+    <h4>Card theme</h4>
+    <div class="chips" data-pref="theme">
+      <button data-v="art">Album</button><button data-v="midnight">Midnight</button><button data-v="retro">Retro</button><button data-v="neon">Neon</button><button data-v="cyberpunk" data-paid="cyberpunk">Cyberpunk</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+    </div>
+    <h4>Record</h4>
+    <div class="chips" data-pref="record">
+      <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+    </div>
+    <h4>Record speed</h4>
+    <div class="chips" data-pref="speed">
+      <button data-v="slow" title="about 16 rpm">Slow</button><button data-v="relaxed" title="about 21 rpm">Relaxed</button><button data-v="33" title="33&#8531; rpm, a real LP">33&#8531; RPM</button><button data-v="45" title="45 rpm, a real single">45 RPM</button>
+    </div>
+    <h4>Needle</h4>
+    <div class="chips" data-pref="needle">
+      <button data-v="classic">Classic</button><button data-v="gold">Gold</button><button data-v="minimal">Minimal</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+    </div>
+    <h4>Visualizer</h4>
+    <div class="chips" data-pref="viz">
+      <button data-v="bars">Bars</button><button data-v="dots">Dots</button><button data-v="wave">Wave</button><button data-v="off">Off</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+    </div>
+    <button class="act store-btn" id="btn-store">Theme Store</button>
+    <h4>Volume</h4>
+    <div class="vol-row">
+      <button class="wbtn" id="btn-mute" title="Mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 010 6M19.5 6.5a8 8 0 010 11"/></svg></button>
+      <input type="range" id="vol" min="0" max="100" step="1" value="50">
+      <span id="vol-n">50</span>
+    </div>
+    <h4>Options</h4>
+    <button class="sw" data-pref="lyrics"><span>Show lyrics</span><i></i></button>
+    <button class="sw" data-pref="toasts"><span>Song-change notifications <small>when hidden</small></span><i></i></button>
+    <button class="sw" data-pref="fade"><span>Fade when not hovered</span><i></i></button>
+    <button class="sw" data-pref="snap"><span>Snap to screen edges</span><i></i></button>
+    <button class="sw" data-pref="autostart"><span>Start with Windows</span><i></i></button>
+    <button class="sw" id="sw-pin"><span>Always on top</span><i></i></button>
+    <h4>Sleep timer <small id="sleep-left"></small></h4>
+    <div class="chips" id="sleep-chips">
+      <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
+    </div>
+    <div class="act-row">
+      <button class="act" id="btn-full" title="F or F11">Full screen</button>
+      <button class="act" id="btn-ambient" title="A">Ambient</button>
+    </div>
+    <div class="act-row"><button class="act" id="btn-tray">Hide to tray</button></div>
+    <p class="hint">Hotkeys: Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+  </div>
+
+  <!-- theme store -->
+  <div class="pop" id="pop-store">
+    <h4>Theme Store <small id="store-mode"></small></h4>
+    <div id="store-items"></div>
+    <h4>Have a license key?</h4>
+    <div class="key-row"><input id="key-in" type="text" placeholder="Paste license key" spellcheck="false" autocomplete="off"><button class="act" id="key-redeem">Redeem</button></div>
+    <p class="hint" id="store-msg"></p>
+  </div>
+
+  <!-- history & favourites -->
+  <div class="pop" id="pop-history">
+    <div class="chips tabs" id="hist-tabs"><button data-v="recent" class="on">Recent</button><button data-v="favs">Favourites</button></div>
+    <div id="hist-list" class="hist"></div>
+    <button class="act" id="hist-clear">Clear recent</button>
+  </div>
+</div>
+<script src="titles.js"></script>
+<script src="renderer.js"></script>
+<script src="features.js"></script>
+</body>
+</html>

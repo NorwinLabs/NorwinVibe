@@ -1,0 +1,22 @@
+{
+  "name": "norwinvibe-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NorwinVibe for Android: plays the music files on your phone",
+  "scripts": {
+    "build:web": "node scripts/sync-web.js",
+    "sync": "node scripts/sync-web.js && cap sync android",
+    "android:debug": "node scripts/sync-web.js && cap sync android && cd android && gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/app": "7.1.2",
+    "@capacitor/core": "7.6.9",
+    "@capacitor/status-bar": "7.0.6",
+    "jsmediatags": "3.9.7",
+    "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.9"
+  }
+}

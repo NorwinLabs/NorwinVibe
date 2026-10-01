@@ -1,0 +1,28 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+  onState: (cb) => ipcRenderer.on('media:state', (_e, m) => cb(m)),
+  onArt: (cb) => ipcRenderer.on('media:art', (_e, m) => cb(m)),
+  onPin: (cb) => ipcRenderer.on('win:pin-changed', (_e, on) => cb(on)),
+  onSleep: (cb) => ipcRenderer.on('sleep:state', (_e, t) => cb(t)),
+  onOwned: (cb) => ipcRenderer.on('store:owned', (_e, l) => cb(l)),
+  storeInfo: () => ipcRenderer.invoke('store:info'),
+  storeBuy: (id) => ipcRenderer.invoke('store:buy', id),
+  storeRedeem: (key) => ipcRenderer.invoke('store:redeem', key),
+  storeTestUnlock: (id) => ipcRenderer.invoke('store:testunlock', id),
+  onUpdate: (cb) => ipcRenderer.on('update:status', (_e, u) => cb(u)),
+  updateState: () => ipcRenderer.invoke('update:state'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateInstall: () => ipcRenderer.send('update:install'),
+  cmd: (c) => ipcRenderer.send('cmd', c),
+  prefs: () => ipcRenderer.invoke('prefs:get'),
+  setPrefs: (p) => ipcRenderer.send('prefs:set', p),
+  lyrics: (m) => ipcRenderer.invoke('lyrics:get', m),
+  toast: (t) => ipcRenderer.send('toast', t),
+  sleep: (mins) => ipcRenderer.send('sleep:set', mins),
+  close: () => ipcRenderer.send('win:close'),
+  minimize: () => ipcRenderer.send('win:minimize'),
+  pin: (on) => ipcRenderer.send('win:pin', on),
+  mini: (on) => ipcRenderer.send('win:mini', on),
+  fullscreen: (on) => ipcRenderer.send('win:fullscreen', on),
+});

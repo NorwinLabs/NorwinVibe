@@ -1,0 +1,437 @@
+/* Settings, themes, lyrics, history/favourites, volume, sleep timer, ambient mode and toasts.
+   Loaded after renderer.js and uses its globals (el, st, bridge, art, livePos, setMini, ...). */
+const root = document.documentElement;
+let P = {};
+let pinned = true;
+
+/* ---------- panels ---------- */
+const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library') };
+const closePops = () => Object.values(pops).forEach((p) => p && p.classList.remove('open'));
+function togglePop(name) {
+  const open = !pops[name].classList.contains('open');
+  closePops(); el.menu.classList.remove('open');
+  pops[name].classList.toggle('open', open);
+  if (open && name === 'history') renderHistory();
+}
+$('btn-settings').onclick = (e) => { e.stopPropagation(); togglePop('settings'); };
+$('btn-history').onclick = (e) => { e.stopPropagation(); togglePop('history'); };
+document.addEventListener('click', (e) => { if (!e.target.closest('.pop')) closePops(); });
+
+/* ---------- preferences ---------- */
+const SPEEDS = { slow: 96, relaxed: 126, '33': 200, '45': 270 }; // deg/s: ~16, 21, 33.3 and 45 rpm
+function showPrefs() {
+  recordDeg = SPEEDS[P.speed] || SPEEDS.slow;
+  root.dataset.theme = P.theme || 'art';
+  root.dataset.record = P.record || 'vinyl';
+  root.dataset.bgart = P.bgart || 'cover';
+  root.dataset.needle = P.needle || 'classic';
+  root.dataset.viz = P.viz || 'bars';
+  root.dataset.fade = P.fade ? 'on' : 'off';
+  document.body.classList.toggle('no-lyrics', !P.lyrics);
+  document.querySelectorAll('.chips[data-pref]').forEach((c) => c.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === P[c.dataset.pref])));
+  document.querySelectorAll('.chips button[data-paid]').forEach((b) => b.classList.toggle('locked', !owns(b.dataset.paid)));
+  document.querySelectorAll('.sw[data-pref]').forEach((b) => b.classList.toggle('on', !!P[b.dataset.pref]));
+  $('sw-pin').classList.toggle('on', pinned);
+}
+function setPref(k, v) {
+  P[k] = v; bridge.setPrefs({ [k]: v }); showPrefs();
+  if (k === 'theme') applyPalette(el.label.classList.contains('art') ? art.data : '');
+  if (k === 'lyrics') { if (v) loadLyrics(st, curDisplay); else clearLyrics(); }
+}
+const owns = (id) => (P.owned || []).includes(id);
+document.querySelectorAll('.chips[data-pref] button').forEach((b) => {
+  b.onclick = () => { if (b.dataset.paid && !owns(b.dataset.paid)) { openStore(b.dataset.paid); return; } setPref(b.parentElement.dataset.pref, b.dataset.v); };
+});
+document.querySelectorAll('.sw[data-pref]').forEach((b) => { b.onclick = () => setPref(b.dataset.pref, !P[b.dataset.pref]); });
+const setPinned = (on, push = true) => { pinned = on; $('sw-pin').classList.toggle('on', on); if (push) bridge.pin(on); };
+$('sw-pin').onclick = () => setPinned(!pinned);
+$('btn-tray').onclick = () => bridge.minimize();
+bridge.onPin((on) => setPinned(on, false));
+prefsReady.then((p) => { P = p; pinned = p.pin; sleepEnds = p.sleepEnds || 0; showPrefs(); });
+
+/* ---------- theme store ---------- */
+const STORE_UI = {
+  cyberpunk: { blurb: 'Neon-soaked card theme, circuit-etched record, plasma needle and a glitch-wave visualizer.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
+    apply: { theme: 'cyberpunk', record: 'cyber', needle: 'cyber', viz: 'cyber' } },
+  nightcity: { blurb: 'Dystopian terminal look: black glass, hot red neon lines, glowing cyan light bars, data-grid overlays, scratches and a glitching HUD.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
+    apply: { theme: 'nightcity', record: 'nightcity', needle: 'nightcity', viz: 'nightcity' } },
+};
+let storeInfo = { testMode: false, owned: [], items: {} };
+const storeMsg = (t) => { $('store-msg').textContent = t || ''; };
+async function renderStore(focus) {
+  try { storeInfo = await bridge.storeInfo(); } catch {}
+  P.owned = storeInfo.owned; showPrefs();
+  $('store-mode').textContent = storeInfo.testMode ? 'TEST MODE' : '';
+  const box = $('store-items'); box.textContent = '';
+  for (const [id, it] of Object.entries(storeInfo.items)) {
+    const ui = STORE_UI[id] || { blurb: '', parts: [], apply: {} };
+    const card = document.createElement('div'); card.className = `store-card pack-${id}` + (focus === id ? ' focus' : '');
+    const prev = document.createElement('div'); prev.className = 'pack-preview';
+    prev.innerHTML = '<i class="pv-rec"></i><i class="pv-arm"></i><span class="pv-bars"><b></b><b></b><b></b><b></b><b></b></span>';
+    const name = document.createElement('div'); name.className = 'pack-name'; name.textContent = it.name;
+    const blurb = document.createElement('p'); blurb.textContent = ui.blurb;
+    const parts = document.createElement('div'); parts.className = 'pack-parts'; ui.parts.forEach((x) => { const s = document.createElement('span'); s.textContent = x; parts.appendChild(s); });
+    const row = document.createElement('div'); row.className = 'pack-row';
+    if (owns(id)) {
+      const ok = document.createElement('span'); ok.className = 'owned'; ok.textContent = 'Owned';
+      const ap = document.createElement('button'); ap.className = 'act'; ap.textContent = 'Apply all';
+      ap.onclick = () => { for (const [k, v] of Object.entries(ui.apply)) setPref(k, v); hud(`${it.name} applied`); };
+      row.append(ok, ap);
+    } else {
+      const buy = document.createElement('button'); buy.className = 'act buy'; buy.textContent = `Buy \u00b7 ${it.price}`;
+      buy.onclick = async () => {
+        const r = await bridge.storeBuy(id);
+        storeMsg(r.ok ? 'Checkout opened in your browser. After paying, paste the license key you receive below.' : r.error);
+      };
+      row.appendChild(buy);
+      if (storeInfo.testMode) {
+        const t = document.createElement('button'); t.className = 'act test'; t.textContent = 'Unlock (test)'; t.title = 'Test mode only: unlocks without paying';
+        t.onclick = async () => { const r = await bridge.storeTestUnlock(id); if (r.ok) { hud(`${it.name} unlocked (test)`); renderStore(id); } else storeMsg(r.error); };
+        row.appendChild(t);
+      }
+    }
+    card.append(prev, name, blurb, parts, row); box.appendChild(card);
+  }
+}
+function openStore(focus) {
+  closePops(); el.menu.classList.remove('open');
+  pops.store.classList.add('open'); storeMsg(''); renderStore(focus);
+}
+$('btn-store').onclick = (e) => { e.stopPropagation(); openStore(); };
+$('key-redeem').onclick = async () => {
+  const key = $('key-in').value.trim(); if (!key) return;
+  const r = await bridge.storeRedeem(key);
+  if (r.ok) { $('key-in').value = ''; storeMsg('Unlocked! Thank you.'); hud('Theme pack unlocked'); renderStore(r.item); } else storeMsg(r.error);
+};
+bridge.onOwned((list) => { P.owned = list; showPrefs(); if (pops.store.classList.contains('open')) renderStore(); });
+
+/* ---------- HUD ---------- */
+let hudTimer;
+function hud(text) {
+  const h = $('hud'); h.textContent = text; h.classList.add('show');
+  clearTimeout(hudTimer); hudTimer = setTimeout(() => h.classList.remove('show'), 1200);
+}
+
+/* ---------- volume ---------- */
+const volEl = $('vol'); let volSetAt = 0, curVol = 0.5, muted = false, volSend = 0;
+const fmtVol = (v) => (v >= 1 ? '1' : v <= 0 ? '0' : v.toFixed(2));
+function showVol(v) {
+  volEl.value = Math.round(v * 100); volEl.style.setProperty('--p', `${volEl.value}%`);
+  $('vol-n').textContent = volEl.value; $('btn-mute').classList.toggle('active', muted);
+}
+volEl.oninput = () => {
+  const v = volEl.value / 100; curVol = v; volSetAt = performance.now(); showVol(v);
+  const now = performance.now();
+  if (now - volSend > 60) { volSend = now; bridge.cmd(`volume:${fmtVol(v)}`); }
+};
+volEl.onchange = () => bridge.cmd(`volume:${fmtVol(volEl.value / 100)}`);
+$('btn-mute').onclick = () => { muted = !muted; volSetAt = performance.now(); showVol(curVol); bridge.cmd(`mute:${muted ? 1 : 0}`); };
+el.card.addEventListener('wheel', (e) => {
+  if (e.target.closest('.pop, .lyrics')) return;
+  const step = e.deltaY < 0 ? 0.03 : -0.03;
+  curVol = Math.min(1, Math.max(0, curVol + step)); volSetAt = performance.now();
+  bridge.cmd(`volstep:${step > 0 ? '0.03' : '-0.03'}`); showVol(curVol);
+  hud(`Volume ${Math.round(curVol * 100)}%`);
+}, { passive: true });
+
+/* ---------- sleep timer ---------- */
+let sleepEnds = 0;
+document.querySelectorAll('#sleep-chips button').forEach((b) => {
+  b.onclick = () => { const m = +b.dataset.v; sleepEnds = m ? Date.now() + m * 60000 : 0; bridge.sleep(m); updateSleep(m); hud(m ? `Pausing in ${m} min` : 'Sleep timer off'); };
+});
+bridge.onSleep((t) => { sleepEnds = t; updateSleep(); });
+function updateSleep(chosen) {
+  const left = sleepEnds - Date.now();
+  $('sleep-left').textContent = left > 0 ? `${Math.ceil(left / 60000)} min left` : '';
+  const sel = chosen !== undefined ? chosen : left > 0 ? [15, 30, 60].find((m) => left <= m * 60000 + 1000) : 0;
+  document.querySelectorAll('#sleep-chips button').forEach((b) => b.classList.toggle('on', +b.dataset.v === (sel || 0)));
+}
+setInterval(updateSleep, 5000); updateSleep(0);
+
+/* ---------- state hooks from renderer.js ---------- */
+function onStateExtra(m) {
+  if (typeof m.vol === 'number' && performance.now() - volSetAt > 900) { curVol = m.vol; muted = !!m.muted; showVol(curVol); }
+  $('btn-fav').classList.toggle('on', isFav(curId));
+}
+
+/* ---------- lyrics ---------- */
+let lyr = { token: 0, lines: [], synced: false, idx: -1 };
+let curDisplay = null;
+const lyricEl = $('lyric'), lyricsBox = $('lyrics');
+
+function parseLRC(text) {
+  const out = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    if (!tags.length) continue;
+    const txt = raw.replace(/\[[^\]]*\]/g, '').trim();
+    for (const t of tags) out.push({ t: +t[1] * 60 + parseFloat(t[2]), text: txt });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+function clearLyrics(msg = '') {
+  lyr = { token: lyr.token + 1, lines: [], synced: false, idx: -1 };
+  lyricEl.textContent = ''; lyricsBox.textContent = '';
+  if (msg) { const n = document.createElement('div'); n.className = 'none'; n.textContent = msg; lyricsBox.appendChild(n); }
+}
+async function loadLyrics(m, d) {
+  clearLyrics();
+  if (!P.lyrics || !m.active || !d || !d.title || !d.artist || m.dur > 900) { if (m.active && m.dur > 900) clearLyrics('Lyrics are skipped for long videos'); return; }
+  const token = lyr.token;
+  clearLyrics('Searching for lyrics…'); lyr.token = token + 1;
+  const mine = lyr.token;
+  const title = d.title.replace(/\s*[-–]\s*(remaster(ed)?|\d{4}\s+remaster|live|single version|radio edit).*$/i, '').trim();
+  let res = null;
+  try { res = await bridge.lyrics({ artist: d.artist, title, album: m.album, dur: m.dur }); } catch {}
+  if (lyr.token !== mine) return; // track changed while searching
+  lyricsBox.textContent = '';
+  const synced = res && res.synced ? parseLRC(res.synced) : [];
+  if (synced.length) {
+    lyr.synced = true; lyr.lines = synced.map((l) => ({ ...l }));
+  } else if (res && res.plain) {
+    lyr.lines = res.plain.split(/\r?\n/).map((text) => ({ t: null, text }));
+  } else { clearLyrics('No lyrics found'); lyr.token = mine; return; }
+  for (const l of lyr.lines) {
+    const n = document.createElement('div'); n.className = 'ln' + (l.t === null ? ' plain' : ''); n.textContent = l.text || '♪';
+    l.el = n; lyricsBox.appendChild(n);
+  }
+}
+
+function lineAt(pos) { // last synced line whose time <= pos (binary search)
+  const a = lyr.lines; let lo = 0, hi = a.length - 1, r = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (a[mid].t <= pos) { r = mid; lo = mid + 1; } else hi = mid - 1; }
+  return r;
+}
+/* ---------- needle: locked to song progress and eased every frame ---------- */
+const armEl = $('arm'), armBase = armEl.querySelector('.arm-base'), tipEl = armEl.querySelector('.arm-tip'), wrapEl = document.querySelector('.vinyl-wrap');
+const R_OUT = 110, R_IN = 50; // stylus distance from the record centre at the first / last groove (record radius is 118)
+const REST_DEG = -4;          // parked position beside the record
+let armTip = [4.2, 173.7];    // stylus position relative to the pivot, unrotated (px); re-measured from the live DOM
+let armRange = null, armRangeAt = 0, armAngle = REST_DEG, armLast = 0;
+
+function measureArm() {
+  const w = wrapEl.getBoundingClientRect(), b = armBase.getBoundingClientRect(), tp = tipEl.getBoundingClientRect();
+  if (!w.width) return;
+  const s = w.width / 236, cx = w.left + w.width / 2, cy = w.top + w.height / 2, px = b.left + b.width / 2, py = b.top + b.height / 2;
+  // calibrate the stylus offset from the real element: undo the arm's current rotation
+  const vx = (tp.left - px) / s, vy = (tp.top - py) / s, ca = Math.cos(-armAngle * Math.PI / 180), sa = Math.sin(-armAngle * Math.PI / 180);
+  armTip = [vx * ca - vy * sa, vx * sa + vy * ca];
+  const radiusAt = (deg) => { const a = deg * Math.PI / 180, c = Math.cos(a), n = Math.sin(a);
+    return Math.hypot(px + (armTip[0] * c - armTip[1] * n) * s - cx, py + (armTip[0] * n + armTip[1] * c) * s - cy) / s; };
+  // The arm's arc runs from the outer edge in toward the centre and can pass THROUGH the centre to the far (top) side.
+  // Always take the first (near-side) crossing, so the stylus stays on the lower/front half of the record.
+  const tipY = (deg) => { const a = deg * Math.PI / 180; return py + (armTip[0] * Math.sin(a) + armTip[1] * Math.cos(a)) * s; };
+  const solve = (r) => { let last = -10; for (let d = -10; d <= 80; d += 0.05) { if (radiusAt(d) <= r || tipY(d) < cy) return d; last = d; } return last; };
+  armRange = { out: solve(R_OUT), inn: solve(R_IN) }; armRangeAt = performance.now();
+}
+const applyArm = () => { armEl.style.transform = `rotate(${armAngle.toFixed(3)}deg)`; };
+function updateArm(t, pos) {
+  const dt = Math.max(0, Math.min(0.1, (t - (armLast || t)) / 1000)); armLast = t; // never negative or huge (clock jumps, tab resume)
+  if (!Number.isFinite(armAngle)) armAngle = REST_DEG;
+  if (!armRange || performance.now() - armRangeAt > 400) measureArm();
+  const playing = el.card.classList.contains('playing');
+  armEl.classList.toggle('lifted', !playing);
+  if (needleDrag) { applyArm(); return; } // the pointer sets the angle while dragging
+  let target = REST_DEG;
+  if (armRange && st.active) {
+    const p = st.dur > 0 ? Math.min(1, Math.max(0, pos / st.dur)) : 0;
+    target = armRange.out + (armRange.inn - armRange.out) * p; // paused too: stays where the song is, just lifted
+  }
+  // tiny moves track the song time exactly; big jumps (seek, new song, lowering) glide
+  const diff = target - armAngle, k = Math.abs(diff) > 3 ? 3.2 : 18;
+  armAngle += diff * (1 - Math.exp(-dt * k));
+  applyArm();
+}
+
+/* Drag the needle along its arc: outer groove = start, inner grooves = end. Seeks on release. */
+let needleDrag = false;
+armEl.title = 'Drag the needle to scrub';
+armEl.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('.arm-rod, .arm-head') || !st.active || !(st.dur > 0) || !st.canSeek) return;
+  measureArm(); if (!armRange) return;
+  e.target.setPointerCapture(e.pointerId);
+  needleDrag = true; document.body.classList.add('needle-drag');
+  scratch = { pos: livePos(), needle: true };
+  moveNeedle(e);
+});
+function moveNeedle(e) {
+  const b = armBase.getBoundingClientRect(), tipAngle = Math.atan2(-armTip[0], armTip[1]) * 180 / Math.PI; // stylus sits slightly off the arm's axis
+  const deg = Math.atan2(-(e.clientX - (b.left + b.width / 2)), e.clientY - (b.top + b.height / 2)) * 180 / Math.PI - tipAngle;
+  armAngle = Math.min(armRange.inn, Math.max(armRange.out, deg)); applyArm();
+  scratch.pos = (armAngle - armRange.out) / (armRange.inn - armRange.out) * st.dur;
+}
+armEl.addEventListener('pointermove', (e) => { if (needleDrag) moveNeedle(e); });
+const endNeedle = () => {
+  if (!needleDrag) return;
+  needleDrag = false; document.body.classList.remove('needle-drag');
+  const p = scratch ? scratch.pos : 0; scratch = null; seekTo(p);
+};
+armEl.addEventListener('pointerup', endNeedle);
+armEl.addEventListener('pointercancel', endNeedle);
+
+function featFrame(t, pos) {
+  updateArm(t, pos);
+  if (!lyr.synced) return;
+  const i = lineAt(pos + 0.25);
+  if (i === lyr.idx) return;
+  if (lyr.idx >= 0 && lyr.lines[lyr.idx].el) lyr.lines[lyr.idx].el.classList.remove('on');
+  lyr.idx = i;
+  const line = i >= 0 ? lyr.lines[i] : null;
+  lyricEl.textContent = line ? line.text || '♪' : '';
+  lyricEl.classList.remove('in'); void lyricEl.offsetWidth; lyricEl.classList.add('in');
+  if (line && line.el) {
+    line.el.classList.add('on');
+    if (mode === 'full') lyricsBox.scrollTo({ top: line.el.offsetTop - lyricsBox.clientHeight / 2 + line.el.offsetHeight / 2, behavior: 'smooth' });
+  }
+}
+
+/* ---------- history & favourites ---------- */
+const store = {
+  get: (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let curId = '', curEntry = null, histTab = 'recent';
+const idOf = (artist, title) => `${artist}|${title}`.toLowerCase();
+const isFav = (id) => !!id && store.get('nv.favs').some((e) => e.id === id);
+
+function makeThumb(dataUrl) {
+  return new Promise((res) => {
+    const i = new Image();
+    i.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = 56;
+      const s = Math.min(i.naturalWidth, i.naturalHeight), x = c.getContext('2d');
+      x.drawImage(i, (i.naturalWidth - s) / 2, (i.naturalHeight - s) / 2, s, s, 0, 0, 56, 56);
+      res(c.toDataURL('image/jpeg', .7));
+    };
+    i.onerror = () => res(''); i.src = dataUrl;
+  });
+}
+function saveEntry(entry) { // newest first, de-duplicated, capped
+  const list = store.get('nv.history').filter((e) => e.id !== entry.id);
+  list.unshift(entry); store.set('nv.history', list.slice(0, 60));
+}
+function onTrackChange(m, d) {
+  curDisplay = m.active ? d : null;
+  curEntry = null; curId = '';
+  $('btn-fav').classList.remove('on');
+  if (!m.active || !d) { clearLyrics(); return; }
+  curId = idOf(d.artist || '', d.title || '');
+  curEntry = { id: curId, title: d.title, artist: d.artist, app: prettyApp(m.app), ts: Date.now(), thumb: '' };
+  const prev = store.get('nv.history').find((e) => e.id === curId);
+  if (prev) curEntry.thumb = prev.thumb || '';
+  saveEntry(curEntry);
+  $('btn-fav').classList.toggle('on', isFav(curId));
+  loadLyrics(m, d);
+  const key = m.key;
+  setTimeout(() => { // give album art a moment to arrive before notifying
+    if (lastKey !== key || !st.playing) return;
+    bridge.toast({ title: d.title, body: d.sub, art: art.key === key ? art.data : '' });
+  }, 1200);
+}
+function onArtFeat(m) {
+  if (m.key !== lastKey || !curEntry || !m.data) return;
+  makeThumb(m.data).then((t) => { if (!t || curEntry === null || m.key !== lastKey) return; curEntry.thumb = t; saveEntry(curEntry); const f = store.get('nv.favs'); const fe = f.find((e) => e.id === curId); if (fe) { fe.thumb = t; store.set('nv.favs', f); } });
+}
+$('btn-fav').onclick = () => {
+  if (!curEntry) return;
+  let favs = store.get('nv.favs');
+  if (favs.some((e) => e.id === curId)) { favs = favs.filter((e) => e.id !== curId); hud('Removed from favourites'); }
+  else { favs.unshift({ ...curEntry }); hud('★ Added to favourites'); }
+  store.set('nv.favs', favs);
+  $('btn-fav').classList.toggle('on', isFav(curId));
+  const b = $('btn-fav'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse');
+  if (pops.history.classList.contains('open')) renderHistory();
+};
+
+function renderHistory() {
+  const box = $('hist-list'); box.textContent = '';
+  const list = store.get(histTab === 'favs' ? 'nv.favs' : 'nv.history');
+  document.querySelectorAll('#hist-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.v === histTab));
+  $('hist-clear').style.display = histTab === 'recent' && list.length ? '' : 'none';
+  if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = histTab === 'favs' ? 'Tap ★ on a song to keep it here' : 'Nothing played yet'; box.appendChild(e); return; }
+  const favIds = new Set(store.get('nv.favs').map((e) => e.id));
+  for (const e of list) {
+    const row = document.createElement('div'); row.className = 'hrow'; row.title = 'Click to copy';
+    const th = document.createElement('div'); th.className = 'th'; if (e.thumb) th.style.backgroundImage = `url("${e.thumb}")`;
+    const tx = document.createElement('div'); tx.className = 'tx';
+    const b = document.createElement('b'); b.textContent = e.title;
+    const sp = document.createElement('span'); sp.textContent = `${e.artist || e.app} · ${new Date(e.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    tx.append(b, sp);
+    const star = document.createElement('button'); star.className = 'star' + (favIds.has(e.id) ? ' on' : ''); star.title = 'Favourite';
+    star.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8z"/></svg>';
+    star.onclick = (ev) => {
+      ev.stopPropagation(); let f = store.get('nv.favs');
+      f = f.some((x) => x.id === e.id) ? f.filter((x) => x.id !== e.id) : [{ ...e }, ...f];
+      store.set('nv.favs', f); renderHistory(); $('btn-fav').classList.toggle('on', isFav(curId));
+    };
+    row.onclick = () => { navigator.clipboard?.writeText(`${e.artist ? e.artist + ' – ' : ''}${e.title}`).then(() => hud('Copied to clipboard')).catch(() => {}); };
+    row.append(th, tx, star); box.appendChild(row);
+  }
+}
+document.querySelectorAll('#hist-tabs button').forEach((b) => { b.onclick = () => { histTab = b.dataset.v; renderHistory(); }; });
+$('hist-clear').onclick = () => { store.set('nv.history', []); renderHistory(); };
+
+/* ---------- full screen & ambient modes ---------- */
+let mode = 'none'; // 'none' | 'full' | 'ambient'
+let idleTimer = 0;
+function fitStage() {
+  if (mode === 'none') return;
+  const c = el.card, used = ['.top', '.meta', '.progress', '.controls'].reduce((n, q) => n + c.querySelector(q).offsetHeight, 0);
+  const h = c.clientHeight - used - 64 - 40;
+  const w = mode === 'ambient' ? c.clientWidth - 112 : (c.clientWidth - 112 - 40) / 2.15;
+  root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 3 : 2.4, h / 250, w / 310)).toFixed(2));
+  fitTitle();
+}
+function bumpIdle() { // ambient hides its UI (and the cursor) after a few idle seconds
+  if (mode !== 'ambient') return;
+  document.body.classList.remove('idle-ui'); clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add('idle-ui'), 3000);
+}
+function setMode(next) {
+  if (next === mode) return;
+  if (next !== 'none' && mini) { setMini(false); setTimeout(() => setMode(next), 250); return; }
+  const wasNone = mode === 'none';
+  mode = next; closePops(); el.menu.classList.remove('open');
+  document.body.classList.toggle('fullscreen', next !== 'none');
+  document.body.classList.toggle('ambient', next === 'ambient');
+  $('hdr-full').classList.toggle('active', next === 'full');
+  $('hdr-ambient').classList.toggle('active', next === 'ambient');
+  document.body.classList.remove('idle-ui'); clearTimeout(idleTimer);
+  if (next === 'none') { bridge.fullscreen(false); root.style.removeProperty('--amb'); }
+  else { if (wasNone) bridge.fullscreen(true); setTimeout(fitStage, 150); setTimeout(fitStage, 500); bumpIdle(); }
+  lyr.idx = -2; // force a refresh of the active lyric line
+}
+const toggleMode = (m) => setMode(mode === m ? 'none' : m);
+$('btn-full').onclick = () => toggleMode('full');
+$('btn-ambient').onclick = () => toggleMode('ambient');
+$('hdr-full').onclick = () => toggleMode('full');
+$('hdr-ambient').onclick = () => toggleMode('ambient');
+window.addEventListener('resize', fitStage);
+['mousemove', 'mousedown', 'keydown', 'wheel'].forEach((ev) => window.addEventListener(ev, bumpIdle, { passive: true }));
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Escape') { if (mode !== 'none') setMode('none'); else closePops(); }
+  else if (e.code === 'KeyF' || e.code === 'F11') { e.preventDefault(); toggleMode('full'); }
+  else if (e.code === 'KeyA') toggleMode('ambient');
+});
+
+
+/* ---------- version + auto-update (desktop only; the phone has no onUpdate) ---------- */
+let appVersion = '';
+const creditEl = $('credit'), verEl = $('credit-ver');
+function showVersion(u) {
+  const v = appVersion ? `v${appVersion}` : '';
+  creditEl.classList.remove('update'); verEl.disabled = false;
+  let msg = '';
+  if (u && u.state === 'downloading') { verEl.textContent = `${v} \u00b7 updating ${u.percent || 0}%`; msg = `Downloading ${u.version ? 'v' + u.version : 'an update'}\u2026 ${u.percent || 0}%`; }
+  else if (u && u.state === 'ready') { creditEl.classList.add('update'); verEl.textContent = `Restart to update to v${u.version}`; verEl.title = 'Install the update and relaunch'; msg = `v${u.version} is ready. Click the version at the bottom to restart.`; }
+  else { verEl.textContent = v; verEl.title = 'Version'; msg = u && u.state === 'none' ? 'You are on the latest version.' : u && u.state === 'checking' ? 'Checking for updates\u2026' : u && u.state === 'error' ? 'Could not check for updates. Will try again later.' : u && u.state === 'unsupported' ? 'Updates are checked in the installed app.' : ''; }
+  const m = $('update-msg'); if (m) m.textContent = msg;
+}
+prefsReady.then((p) => { appVersion = p.version || window.APP_VERSION || ''; showVersion(null); });
+if (bridge.onUpdate) {
+  bridge.onUpdate(showVersion);
+  bridge.updateState().then((u) => { if (u && u.state !== 'idle') showVersion(u); });
+  verEl.onclick = () => { if (creditEl.classList.contains('update')) bridge.updateInstall(); };
+  $('btn-update').onclick = () => { bridge.updateCheck().then(showVersion); };
+} else { $('btn-update').style.display = 'none'; }

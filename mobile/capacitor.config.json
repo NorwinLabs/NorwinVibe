@@ -1,0 +1,9 @@
+{
+  "appId": "com.norwinlabs.vibe",
+  "appName": "NorwinVibe",
+  "webDir": "www",
+  "backgroundColor": "#0c0c12",
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

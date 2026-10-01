@@ -1,0 +1,78 @@
+apply plugin: 'com.android.application'
+
+// Version numbers live in mobile/version.properties. The release workflow bumps VERSION_CODE and commits it back,
+// the same way NorwinLabsTools does, so every published build gets a higher number than the last.
+def versionProps = new Properties()
+file('../../version.properties').withInputStream { versionProps.load(it) }
+
+// Release signing: CI passes the secrets as environment variables; locally use mobile/keystore.properties (git-ignored).
+def keystoreProps = new Properties()
+def keystorePropsFile = file('../../keystore.properties')
+if (keystorePropsFile.exists()) keystorePropsFile.withInputStream { keystoreProps.load(it) }
+def signingValue = { String env, String key -> System.getenv(env) ?: keystoreProps.getProperty(key) }
+
+android {
+    namespace "com.norwinlabs.vibe"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.norwinlabs.vibe"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode versionProps.getProperty("VERSION_CODE").trim().toInteger()
+        versionName versionProps.getProperty("VERSION_NAME").trim()
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            def storeFile = signingValue('KEYSTORE_FILE', 'storeFile')
+            if (storeFile) {
+                it.storeFile file(storeFile)
+                storePassword signingValue('KEYSTORE_PASSWORD', 'storePassword')
+                keyAlias signingValue('KEY_ALIAS', 'keyAlias')
+                keyPassword signingValue('KEY_PASSWORD', 'keyPassword')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // Unsigned if no key is configured (local experiments); CI refuses to publish without one.
+            if (signingValue('KEYSTORE_FILE', 'storeFile')) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

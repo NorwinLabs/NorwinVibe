@@ -1,0 +1,15 @@
+{
+  "testMode": true,
+  "items": {
+    "cyberpunk": {
+      "name": "Cyberpunk",
+      "price": "$0.99",
+      "checkoutUrl": ""
+    },
+    "nightcity": {
+      "name": "Night City",
+      "price": "$0.99",
+      "checkoutUrl": ""
+    }
+  }
+}
