@@ -43,6 +43,7 @@ public class MediaPlaybackService extends Service {
     private static volatile boolean running = false;
     private static MediaSession session;
     private static Bitmap lastArt;
+    private static String lastSong = "";
     private static PowerManager.WakeLock wakeLock;
 
     /** Keeps the CPU awake so audio does not stutter with the screen off, but only while something is actually playing. */
@@ -153,6 +154,10 @@ public class MediaPlaybackService extends Service {
 
     /** Stores the song for the widget and applies any new artwork. Returns the notification to show. */
     private static Notification apply(Context ctx, Params p) {
+        String song = p.title + "\n" + p.text + "\n" + p.album;
+        boolean newSong = !song.equals(lastSong);
+        lastSong = song;
+        if (newSong && (p.art == null || p.art.isEmpty())) lastArt = null; // a song without a cover must not keep the previous song's
         if (p.art != null && !p.art.isEmpty()) {
             try { byte[] raw = Base64.decode(p.art, Base64.DEFAULT); lastArt = BitmapFactory.decodeByteArray(raw, 0, raw.length); } catch (Exception ignored) { }
         }
