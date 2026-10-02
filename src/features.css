@@ -340,7 +340,6 @@ html[data-needle="nightcity"] .arm-head { border-radius: 0; background: #ff2b4e;
 .credit.update { color: rgba(255,255,255,.6); }
 .mini .credit { display: none; }
 .mobile .credit { bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
-.mobile #btn-update, .mobile #update-msg { display: none; }
 
 
 /* ---------- background: show the actual album cover / video thumbnail ---------- */

@@ -462,7 +462,7 @@ prefsReady.then((p) => { appVersion = p.version || window.APP_VERSION || ''; sho
 if (bridge.onUpdate) {
   bridge.onUpdate(showVersion);
   bridge.updateState().then((u) => { if (u && u.state !== 'idle') showVersion(u); });
-  verEl.onclick = () => { if (creditEl.classList.contains('update')) bridge.updateInstall(); };
+  verEl.onclick = () => { if (creditEl.classList.contains('update')) bridge.updateInstall(); else if (window.UPDATE_VERB) bridge.updateCheck().then(showVersion); }; // on the phone, tapping the version also checks
   const updBtn = $('btn-update');
   const label = { checking: 'Checking…', none: 'Up to date ✓', downloading: 'Downloading…', ready: 'Update ready', error: 'Check failed', unsupported: 'Installed app only' };
   let labelTimer = 0;
