@@ -144,7 +144,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .idle .progress, .idle .ctl:not(.play) { opacity: .35; pointer-events: none; }
 
 /* ---------- mini mode ---------- */
-.mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr 116px; grid-template-areas: "stage meta controls" "stage progress progress";
+.mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr 150px; grid-template-areas: "stage meta controls" "stage progress progress";
   align-items: center; column-gap: 14px; padding: 12px 14px 10px 14px; border-radius: 24px; }
 .mini .card > .top { position: absolute; top: 4px; right: 8px; height: 20px; z-index: 3; }
 .mini .source, .mini .arm, .mini .glow, .mini .time { display: none; }

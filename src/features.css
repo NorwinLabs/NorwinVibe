@@ -67,12 +67,6 @@ body.no-lyrics.mini .lyric, .mini body.no-lyrics .lyric { display: none; }
 .sw i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .25s var(--ease); }
 .sw.on i { background: var(--accent); } .sw.on i::after { transform: translateX(14px); }
 .vol-row { display: flex; align-items: center; gap: 8px; } .vol-row span { width: 24px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.volline { flex: 0 0 100%; max-width: 260px; margin-top: 4px; -webkit-app-region: no-drag; }
-.volline .vol-row { gap: 6px; }
-.volline .wbtn { flex: none; width: 26px; height: 26px; }
-.mini .volline { margin-top: 0; flex: 0 0 100%; width: 100%; max-width: 116px; }
-.mini .volline .vol-row { gap: 4px; } .mini .volline .vol-row span { display: none; }
-.mini .volline .wbtn { width: 20px; height: 20px; } .mini .volline input[type=range] { height: 14px; min-width: 0; width: 0; }
 .vol-row .wbtn.active { color: #fff; background: rgba(255,255,255,.12); }
 input[type=range] { flex: 1; height: 18px; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
 input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--p, 50%), rgba(255,255,255,.2) var(--p, 50%)); }
@@ -128,9 +122,6 @@ body.fullscreen { padding: 0; }
 .fullscreen .controls { gap: calc(6px * var(--ui, 1)); }
 .fullscreen .top .wbtn { width: calc(30px * var(--ui, 1)); height: calc(30px * var(--ui, 1)); } .fullscreen .top .wbtn svg { width: calc(15px * var(--ui, 1)); height: calc(15px * var(--ui, 1)); }
 .fullscreen .card { padding: calc(28px * var(--ui, 1)) calc(56px * var(--ui, 1)) calc(36px * var(--ui, 1)); column-gap: calc(40px * var(--ui, 1)); }
-.fullscreen .volline { max-width: calc(260px * var(--ui, 1)); margin-top: calc(4px * var(--ui, 1)); }
-.fullscreen .volline .wbtn { width: calc(26px * var(--ui, 1)); height: calc(26px * var(--ui, 1)); } .fullscreen .volline .wbtn svg { width: calc(14px * var(--ui, 1)); height: calc(14px * var(--ui, 1)); }
-.fullscreen .volline .vol-row span { width: calc(24px * var(--ui, 1)); font-size: calc(11px * var(--ui, 1)); }
 .fullscreen.ultrawide .card { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
 .ambient .card, .ambient.ultrawide .card { grid-template-columns: minmax(0, 1fr); }
 .fullscreen .hud { top: 80px; }
@@ -458,3 +449,20 @@ body.ghost .card { opacity: .62; }
 .tour-foot span { flex: 1; font-size: 10px; letter-spacing: .12em; color: var(--accent); }
 .tour-foot .act { flex: none; padding: 7px 14px; }
 .mini .tour, .fullscreen .tour { display: none; }
+
+/* volume: a speaker icon in the controls row; click it for the slider */
+.volwrap { position: relative; -webkit-app-region: no-drag; }
+.volpop { position: absolute; z-index: 5; bottom: calc(100% + 10px); right: -6px; width: 210px; padding: 8px 10px; border-radius: 14px; background: rgba(20,20,28,.96); box-shadow: 0 12px 30px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.1);
+  opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity .2s, transform .25s var(--ease); }
+.volpop.open { opacity: 1; transform: none; pointer-events: auto; }
+.volpop .vol-row { gap: 6px; } .volpop .wbtn { flex: none; width: 26px; height: 26px; }
+#btn-vol.on { color: #fff; background: color-mix(in srgb, var(--accent) 40%, transparent); }
+#btn-vol .x, #btn-vol .w2 { display: none; } #btn-vol .w1 { display: block; }
+#btn-vol.lo .w2 { display: none; } #btn-vol:not(.lo):not(.muted) .w2 { display: block; }
+#btn-vol.muted .w1, #btn-vol.muted .w2 { display: none; } #btn-vol.muted .x { display: block; }
+.mini #btn-vol { display: grid; }
+.mini .volpop { bottom: auto; top: 50%; right: calc(100% + 6px); width: 150px; transform: translateY(-50%) translateX(6px); }
+.mini .volpop.open { transform: translateY(-50%); }
+.mini .volpop .vol-row span { display: none; }
+.fullscreen .volpop { width: calc(240px * var(--ui, 1)); bottom: calc(100% + 12px * var(--ui, 1)); }
+.fullscreen .volpop .wbtn { width: calc(26px * var(--ui, 1)); height: calc(26px * var(--ui, 1)); } .fullscreen .volpop .vol-row span { font-size: calc(11px * var(--ui, 1)); width: calc(24px * var(--ui, 1)); }

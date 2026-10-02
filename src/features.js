@@ -167,7 +167,13 @@ const fmtVol = (v) => (v >= 1 ? '1' : v <= 0 ? '0' : v.toFixed(2));
 function showVol(v) {
   volEl.value = Math.round(v * 100); volEl.style.setProperty('--p', `${volEl.value}%`);
   $('vol-n').textContent = volEl.value; $('btn-mute').classList.toggle('active', muted);
+  $('btn-vol').classList.toggle('muted', muted || +volEl.value === 0); $('btn-vol').classList.toggle('lo', +volEl.value < 40);
 }
+const volPop = $('volpop'); let volHide = 0;
+const bumpVol = () => { clearTimeout(volHide); volHide = setTimeout(() => volPop.classList.remove('open'), 3500); }; // closes itself a few seconds after the last touch
+$('btn-vol').onclick = (e) => { e.stopPropagation(); const open = !volPop.classList.contains('open'); closePops(); volPop.classList.toggle('open', open); $('btn-vol').classList.toggle('on', open); if (open) bumpVol(); };
+document.addEventListener('click', (e) => { if (!e.target.closest('#volwrap')) { volPop.classList.remove('open'); $('btn-vol').classList.remove('on'); } });
+volPop.addEventListener('pointerdown', bumpVol); volPop.addEventListener('input', bumpVol);
 volEl.oninput = () => {
   const v = volEl.value / 100; curVol = v; volSetAt = performance.now(); showVol(v);
   const now = performance.now();
