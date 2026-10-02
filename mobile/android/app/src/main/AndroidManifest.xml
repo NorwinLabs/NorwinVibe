@@ -31,6 +31,16 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Android Auto: browse the library and play from the car (Pro) -->
+        <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
+        <service
+            android:name=".AutoBrowserService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
         <!-- notification / lock screen / widget buttons -->
         <receiver
             android:name=".MediaActionReceiver"

@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateInstall: () => ipcRenderer.send('update:install'),
   exportFile: (f) => ipcRenderer.invoke('file:export', f),
+  ghost: (on) => ipcRenderer.send('win:ghost', !!on),
+  onGhost: (cb) => ipcRenderer.on('ghost:state', (_e, on) => cb(!!on)),
   onScreensaver: (cb) => ipcRenderer.on('screensaver:request', () => cb()),
   screensaverState: (on) => ipcRenderer.send('screensaver:state', !!on),
   proStatus: () => ipcRenderer.invoke('pro:status'),

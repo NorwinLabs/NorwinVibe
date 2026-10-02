@@ -4,6 +4,7 @@
    Must load BEFORE renderer.js. */
 (() => {
   'use strict';
+  window.FRAME_MS = 33; // draw the record / ring at ~30 fps on phones (see renderer.js frame())
   const $ = (id) => document.getElementById(id);
   const LS = {
     get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -57,6 +58,7 @@
     if (devActive && prefs.devAsFree) set.add('dev');
     else { real.forEach((i) => set.add(i)); if (devActive) set.add('pro'); if (set.has('pro')) PACK_IDS.forEach((i) => set.add(i)); }
     entitled = set;
+    setTimeout(() => window.dispatchEvent(new Event('vibe:library')), 0); // Pro on / off changes what Android Auto may show
   }
   const entitlementList = () => [...entitled];
   const allowed = (k, v) => { for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id); return true; };
@@ -313,7 +315,14 @@
     d.addEventListener('error', () => { if (d === audio) toast('Could not play that file'); });
   });
 
+  let lastUp = null;
+  function updateUpNext() { // "Up next: ..." under the lyric line
+    const e = $('upnext'); if (!e) return;
+    const t = cur ? lib.find((x) => x.id === peekNext()) : null, txt = t ? `Up next · ${t.title}${t.artist ? ' – ' + t.artist : ''}` : '';
+    if (txt !== lastUp) { lastUp = txt; e.textContent = txt; }
+  }
   function emit() {
+    updateUpNext();
     if (!cb.state) return;
     if (!cur) { cb.state({ type: 'state', active: false, vol: audio.volume, muted }); return; }
     cb.state({
@@ -360,10 +369,44 @@
   }
   function pushNative(withArt) { if (bg && bgOn) { const p = nativePayload(withArt); bg.update(p).then(() => { if (p.art && cur) artSentFor = keyOf(cur); }).catch(() => {}); } }
   function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; } }, 60000); }
+  let duckVol = 0;
+
+  /* ---------- Android Auto / Assistant (Pro) ---------- */
+  function autoPlay(id, listId) { // a song picked in the car's browse tree
+    if (!entitled.has('pro') || !id || !lib.some((t) => t.id === id)) return;
+    source = listId && playlists.some((p) => p.id === listId) ? { type: 'playlist', id: listId } : { type: 'library', id: null };
+    buildOrder(id); loadTrack(id, true);
+  }
+  function autoSearch(q) { // "Hey Google, play <song / artist> on NorwinVibe"
+    if (!entitled.has('pro')) return;
+    q = String(q || '').trim().toLowerCase();
+    if (!q) { if (!cur) startPlayback(); else audio.play(); return; }
+    const words = q.split(/\s+/).filter(Boolean);
+    const score = (t) => { const hay = `${t.title} ${t.artist} ${t.album}`.toLowerCase(); return words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0) + (t.title.toLowerCase() === q ? 3 : 0); };
+    const best = lib.map((t) => [score(t), t]).filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]);
+    if (!best.length) return;
+    const top = best[0][1]; source = { type: 'library', id: null }; buildOrder(top.id); loadTrack(top.id, true);
+  }
+  let autoTimer = 0;
+  function pushAuto() { // keep the car's browse tree in step with the library and playlists (debounced)
+    if (!bg || !bg.setLibrary) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      const pro = entitled.has('pro');
+      const songs = pro ? lib.slice(0, 300).map((t) => ({ id: t.id, t: t.title, a: t.artist || '' })) : [];
+      const lists = pro ? playlists.map((p) => ({ id: p.id, name: p.name, ids: sourceIdsFor(p.id).slice(0, 200) })) : [];
+      bg.setLibrary({ songs, lists }).catch(() => {});
+    }, 1200);
+  }
+  window.addEventListener('vibe:library', pushAuto);
   if (bg && bg.addListener) bg.addListener('action', (e) => { // buttons on the notification / lock screen / widget
     const a = e && e.action;
     if ((a === 'play' || a === 'toggle') && !cur) startPlayback();
     else if (a === 'play') audio.play(); else if (a === 'pause') audio.pause(); else if (a === 'toggle') (audio.paused ? audio.play() : audio.pause());
+    else if (a === 'playId') autoPlay(e.id, e.list);
+    else if (a === 'playSearch') autoSearch(e.query);
+    else if (a === 'duck') { if (!duckVol) { duckVol = audio.volume; setVol(duckVol * 0.3); } } // another app is speaking: lower the music
+    else if (a === 'unduck') { if (duckVol) { setVol(duckVol); duckVol = 0; } }
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
   });
 
@@ -464,6 +507,15 @@
         if (ENUMS[k] && ENUMS[k].includes(v) && allowed(k, v)) prefs[k] = v; else if (typeof DEFAULTS[k] === 'boolean' && typeof v === 'boolean') prefs[k] = v;
       } savePrefs();
     },
+    exportFile: async (f) => { // share sheet (save to Files / send to an app); falls back to the clipboard for text
+      try {
+        const bytes = f.base64 ? Uint8Array.from(atob(f.content), (c) => c.charCodeAt(0)) : null;
+        const file = new File([bytes || f.content], f.name || 'export.txt', { type: f.mime || 'text/plain' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: f.name }); return { ok: true }; }
+      } catch (e) { if (e && e.name === 'AbortError') return { ok: false, canceled: true }; }
+      if (!f.base64) { try { await navigator.clipboard.writeText(f.content); return { ok: true, copied: true }; } catch {} }
+      return { ok: false };
+    },
     lyrics: (m) => fetchLyrics(m || {}),
     toast: () => {}, sleep: (m) => setSleep([0, 15, 30, 60].includes(m) ? m : 0),
     close: () => {}, minimize: () => {}, pin: () => {}, mini: () => {}, fullscreen: () => {},
@@ -504,7 +556,7 @@
     const b = document.createElement('button'); b.className = cls; b.title = title; b.setAttribute('aria-label', title);
     b.innerHTML = `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`; b.onclick = (e) => { e.stopPropagation(); onclick(); }; return b;
   };
-  const ICON_X = 'M6 6l12 12M18 6L6 18', ICON_PLUS = 'M12 5v14M5 12h14';
+  const ICON_X = 'M6 6l12 12M18 6L6 18', ICON_PLUS = 'M12 5v14M5 12h14', ICON_NEXT = 'M5 5l9 7-9 7zM17 5v14', ICON_UP = 'M12 19V6M6 11l6-6 6 6';
   function songRow(t, extra) {
     const row = document.createElement('div'); row.className = 'hrow' + (cur && cur.id === t.id ? ' now' : '');
     const th = document.createElement('div'); th.className = 'th'; if (t.art) th.style.backgroundImage = `url("${t.art}")`;
@@ -517,23 +569,57 @@
 
   async function renderLibrary() {
     await libReady;
+    window.dispatchEvent(new Event('vibe:library'));
     const tabs = $('lib-tabs'); if (tabs) tabs.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === libTab));
     searchEl.style.display = libTab === 'songs' ? '' : 'none';
     $('lib-actions').style.display = libTab === 'songs' ? '' : 'none';
+    if (libTab === 'queue') return renderQueue();
     if (libTab === 'lists') return renderPlaylists();
     $('lib-count').textContent = lib.length ? `${lib.length} song${lib.length === 1 ? '' : 's'}` : 'Your library';
     const q = (searchEl.value || '').trim().toLowerCase();
     const rows = q ? lib.filter((t) => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q)) : lib;
     listEl.textContent = '';
     if (!rows.length) return empty(lib.length ? 'No matches' : 'Tap "Find my music" to add the songs on your phone');
-    for (const t of rows) {
+    // big libraries: draw 60 rows now and more as the list is scrolled (thousands of rows at once would make the phone crawl)
+    pageRows = rows; pageShown = 0; listEl.scrollTop = 0; appendRows();
+  }
+  const PAGE = 60; let pageRows = [], pageShown = 0;
+  function appendRows() {
+    const end = Math.min(pageRows.length, pageShown + PAGE), frag = document.createDocumentFragment();
+    for (let i = pageShown; i < end; i++) {
+      const t = pageRows[i];
       const row = songRow(t, [
+        iconBtn('Play next', ICON_NEXT, () => playNext(t.id)),
         iconBtn('Add to a playlist', ICON_PLUS, () => pickPlaylist(t.id)),
         iconBtn('Remove from library', ICON_X, () => { if (confirm(`Remove "${t.title}" from your library?`)) removeTrack(t.id); }),
       ]);
       row.onclick = () => { source = { type: 'library', id: null }; playId(t.id); closeLib(); };
-      listEl.appendChild(row);
+      frag.appendChild(row);
     }
+    listEl.appendChild(frag); pageShown = end;
+  }
+  listEl.addEventListener('scroll', () => { if (libTab === 'songs' && pageShown < pageRows.length && listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - 400) appendRows(); }, { passive: true });
+
+  function playNext(id) {
+    if (!cur) { source = { type: 'library', id: null }; playId(id); return; }
+    const k = order.indexOf(id); if (k >= 0) { order.splice(k, 1); if (k <= idx) idx--; }
+    order.splice(idx + 1, 0, id); toast('Playing next'); updateUpNext();
+  }
+  function renderQueue() { // what is coming up; tap to jump there, arrow = move to the top, x = take it out
+    listEl.textContent = '';
+    $('lib-count').textContent = 'Up next';
+    const ids = order.slice(idx + 1, idx + 61);
+    if (!cur || !ids.length) return empty(cur ? 'Nothing else is queued' : 'Play a song to see the queue');
+    ids.forEach((id, n) => {
+      const t = lib.find((x) => x.id === id); if (!t) return;
+      const pos = idx + 1 + n;
+      const row = songRow(t, [
+        iconBtn('Move to the top', ICON_UP, () => { order.splice(pos, 1); order.splice(idx + 1, 0, id); updateUpNext(); renderQueue(); }),
+        iconBtn('Remove from the queue', ICON_X, () => { order.splice(pos, 1); updateUpNext(); renderQueue(); }),
+      ]);
+      row.onclick = () => { idx = pos - 1; next(); closeLib(); };
+      listEl.appendChild(row);
+    });
   }
 
   function lockedNotice(text) {
@@ -606,10 +692,10 @@
   $('lib-add').onclick = () => (scanner ? scanPhone(true) : fileIn.click());
   $('lib-pick').onclick = () => fileIn.click(); // still possible to add single files, e.g. from a folder the scan does not cover
   fileIn.onchange = () => { const picked = [...fileIn.files]; fileIn.value = ''; if (picked.length) addFiles(picked); }; // copy first: the FileList is live and clearing the input empties it
-  searchEl.oninput = renderLibrary;
+  let searchTimer = 0; searchEl.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLibrary, 160); }; // wait for a pause in typing
   $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
   $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
-  libReady.then(() => { buildOrder(); renderLibrary(); scanPhone(false); }); // quiet rescan on launch (never prompts)
+  libReady.then(() => { buildOrder(); renderLibrary(); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */
@@ -667,6 +753,13 @@
     app.minimizeApp?.();
   });
   // size the record to the screen width
-  const fit = () => document.documentElement.style.setProperty('--ms', Math.max(0.9, Math.min(1.5, (card.clientWidth - 40) / 300)).toFixed(2));
-  window.addEventListener('resize', fit); fit(); setTimeout(fit, 300);
+  const fit = () => { // size the record to the screen; in landscape it is the height that limits it
+    const land = window.innerWidth > window.innerHeight;
+    const ms = land ? Math.max(0.6, Math.min(1.3, (card.clientHeight - 64) / 250)) : Math.max(0.9, Math.min(1.5, (card.clientWidth - 40) / 300));
+    document.documentElement.style.setProperty('--ms', ms.toFixed(2));
+  };
+  window.addEventListener('resize', fit); window.addEventListener('orientationchange', () => setTimeout(fit, 150)); fit(); setTimeout(fit, 300);
+  // car mode: big buttons (remembered)
+  const carSw = $('sw-car');
+  if (carSw) { const setCar = (on) => { document.body.classList.toggle('car', on); carSw.classList.toggle('on', on); LS.set('nv.car', on); setTimeout(fit, 50); }; setCar(!!LS.get('nv.car', false)); carSw.onclick = () => setCar(!document.body.classList.contains('car')); }
 })();

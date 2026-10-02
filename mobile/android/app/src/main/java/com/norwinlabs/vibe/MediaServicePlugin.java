@@ -32,6 +32,45 @@ public class MediaServicePlugin extends Plugin {
     @Override
     protected void handleOnDestroy() { if (instance == this) instance = null; }
 
+    private static String pendingId, pendingList, pendingQuery;
+
+    /** A song (or a voice search) chosen in Android Auto. If the web UI is not running, remember it and open the app. */
+    static void dispatchPlay(String id, String list, String query) {
+        MediaServicePlugin p = instance;
+        if (p != null) {
+            JSObject o = new JSObject();
+            o.put("action", query != null ? "playSearch" : "playId");
+            if (id != null) o.put("id", id);
+            if (list != null) o.put("list", list);
+            if (query != null) o.put("query", query);
+            p.notifyListeners("action", o, true);
+            return;
+        }
+        pendingId = id; pendingList = list; pendingQuery = query;
+        android.content.Context c = MediaPlaybackService.appContext();
+        if (c != null) {
+            try { c.startActivity(new android.content.Intent(c, MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)); } catch (Exception ignored) { }
+        }
+    }
+
+    /** The web UI asks, once it has started, whether the car picked something while it was not running. */
+    @PluginMethod
+    public void takePending(PluginCall call) {
+        JSObject o = new JSObject();
+        if (pendingId != null) o.put("id", pendingId);
+        if (pendingList != null) o.put("list", pendingList);
+        if (pendingQuery != null) o.put("query", pendingQuery);
+        pendingId = null; pendingList = null; pendingQuery = null;
+        call.resolve(o);
+    }
+
+    /** The library / playlists for the Android Auto browse tree (empty for free users). */
+    @PluginMethod
+    public void setLibrary(PluginCall call) {
+        AutoBrowserService.setSnapshot(getContext(), call.getData().toString());
+        call.resolve();
+    }
+
     /** Called from the service / receiver; delivered to the web UI if it is alive. */
     static void dispatch(String action, long positionMs) {
         MediaServicePlugin p = instance;

@@ -23,6 +23,9 @@ html[data-theme="neon"] .bg-tint { background:
 .scratching .vinyl { cursor: grabbing; }
 html[data-record="color"] .vinyl { background: color-mix(in srgb, var(--accent) 60%, #0a0a0c); }
 html[data-record="color"] .grooves { background: repeating-radial-gradient(circle at 50% 50%, rgba(0,0,0,.30) 0 1.2px, rgba(255,255,255,.08) 1.2px 2.4px, rgba(0,0,0,.18) 2.4px 3.4px); }
+/* "Album": translucent coloured vinyl in the cover's own colour (plain black until a cover is detected) */
+html[data-record="album"] .vinyl { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--vinyl) 80%, white) 0, var(--vinyl) 38%, color-mix(in srgb, var(--vinyl) 62%, black) 100%); }
+html[data-record="album"] .grooves { background: repeating-radial-gradient(circle at 50% 50%, rgba(0,0,0,.26) 0 1.2px, rgba(255,255,255,.08) 1.2px 2.4px, rgba(0,0,0,.16) 2.4px 3.4px); }
 html[data-record="cd"] .vinyl { background: conic-gradient(from 10deg, #d9deea, #fafbff, #9fb7dc, #f3e6ff, #b7e8d3, #fff, #d9deea, #a8c2e8, #f7f0ff, #d9deea); box-shadow: 0 10px 28px rgba(0,0,0,.55), 0 0 0 1.5px rgba(255,255,255,.35); }
 html[data-record="cd"] .grooves { background: repeating-radial-gradient(circle at 50% 50%, rgba(0,0,0,.07) 0 1px, transparent 1px 4px);
   -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 22.5% 98%, transparent 99%); mask: radial-gradient(circle, transparent 0 22%, #000 22.5% 98%, transparent 99%); }
@@ -41,7 +44,7 @@ html[data-fade="on"] .card:not(:hover):not(:focus-within) { opacity: .45; }
 @keyframes lyr { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } }
 body.no-lyrics .lyric { display: none; }
 .lyrics { display: none; }
-.mini .lyric { display: block; min-height: 15px; margin-top: 2px; padding: 0; font-size: 11.5px; text-align: left; }
+.mini .lyric { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; white-space: normal; text-wrap: balance; min-height: 30px; margin-top: 3px; padding: 0; font-size: 11.5px; line-height: 1.3; text-align: left; overflow: hidden; }
 body.no-lyrics.mini .lyric, .mini body.no-lyrics .lyric { display: none; }
 
 /* ================= panels ================= */
@@ -436,3 +439,22 @@ body:not(.mobile) .mob-only { display: none !important; }
 .fullscreen .top::after, .mobile .top::after { display: none; }
 .mobile .top { margin: 0; padding: 0; }
 .fullscreen .top { margin: 0; padding: 0; }
+
+/* ---------- accessibility, custom colours, click-through, tour, search ---------- */
+body.calm *, body.calm *::before, body.calm *::after { animation: none !important; transition-duration: .01s !important; }
+body.big .meta { zoom: 1.16; } body.big .time { font-size: 13px; }
+html[data-custom] { --accent: var(--c-a) !important; --accent-2: var(--c-b) !important; --vinyl: var(--c-a) !important; }
+.auto-row input[type=color] { width: 100%; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; }
+.pro-block.locked #custom-row, .pro-block.locked #btn-share, .pro-block.locked #btn-recap { opacity: .55; }
+body.ghost .card { opacity: .62; }
+.search, #lib-search { width: 100%; padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; border: 0; outline: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.35); color: #fff; font: inherit; font-size: 12.5px; -webkit-user-select: text; user-select: text; }
+.search:focus { outline-color: var(--accent); }
+.tour { position: absolute; inset: 0; z-index: 20; display: grid; place-items: end center; padding: 0 16px 56px; background: rgba(0,0,0,.45); -webkit-app-region: no-drag; }
+.tour[hidden] { display: none; }
+.tour-card { width: min(320px, 100%); padding: 16px 16px 12px; border-radius: 18px; background: rgba(22,22,32,.97); box-shadow: 0 16px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.12); animation: pop .35s var(--ease) both; }
+.tour-card b { display: block; font-size: 15px; margin-bottom: 4px; }
+.tour-card p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.tour-foot { display: flex; align-items: center; gap: 8px; }
+.tour-foot span { flex: 1; font-size: 10px; letter-spacing: .12em; color: var(--accent); }
+.tour-foot .act { flex: none; padding: 7px 14px; }
+.mini .tour, .fullscreen .tour { display: none; }

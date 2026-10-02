@@ -199,4 +199,5 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 @property --accent-2 { syntax: '<color>'; inherits: true; initial-value: #ec4899; }
 @property --veil-a { syntax: '<number>'; inherits: true; initial-value: .45; }
 @property --veil-b { syntax: '<number>'; inherits: true; initial-value: .82; }
-:root { transition: --accent 1.2s ease, --accent-2 1.2s ease, --veil-a 1.2s ease, --veil-b 1.2s ease; }
+@property --vinyl { syntax: '<color>'; inherits: true; initial-value: #0b0b0d; }
+:root { transition: --accent 1.2s ease, --accent-2 1.2s ease, --veil-a 1.2s ease, --veil-b 1.2s ease, --vinyl 1.2s ease; }

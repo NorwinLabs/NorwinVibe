@@ -16,7 +16,7 @@ const fs = require('fs');
 const APP_ID = 'com.norwinlabs.vibe.desktop'; // must equal build.appId in package.json
 app.setAppUserModelId(APP_ID);
 
-const SIZES = { full: { w: 360, h: 560 }, mini: { w: 420, h: 124 } };
+const SIZES = { full: { w: 360, h: 560 }, mini: { w: 420, h: 176 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
   autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
@@ -26,7 +26,7 @@ const ENUMS = {
   autoDay: THEMES, autoEve: THEMES, autoNight: THEMES, ssMin: ['1', '3', '5', '10'],
   speed: ['slow', 'relaxed', '33', '45'],
   theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
-  record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
+  record: ['vinyl', 'color', 'album', 'cd', 'cyber', 'nightcity'],
   needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
   viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
 };
@@ -185,6 +185,7 @@ function createTray() {
     { label: 'Previous', click: () => sendCmd('prev') },
     { type: 'separator' },
     { label: 'Always on top', type: 'checkbox', checked: pref('pin'), click: (i) => setPin(i.checked) },
+    { label: 'Click-through', type: 'checkbox', checked: ghost, click: (i) => setGhost(i.checked) },
     { label: 'Quit', click: () => app.quit() },
   ]);
   tray.on('click', toggleVisible);
@@ -408,6 +409,7 @@ function registerHotkeys() {
     'Control+Alt+Up': () => sendCmd('volstep:0.05'),
     'Control+Alt+Down': () => sendCmd('volstep:-0.05'),
     'Control+Alt+H': toggleVisible,
+    'Control+Alt+G': () => setGhost(!ghost),
   };
   for (const [k, fn] of Object.entries(keys)) { try { globalShortcut.register(k, fn); } catch {} }
 }
@@ -482,12 +484,13 @@ ipcMain.on('dev:signout', () => {
   delete prefs.devAsFree; recompute(); dropLockedChoices(); savePrefs();
   toRenderer('store:owned', entitlementList());
 });
-ipcMain.handle('file:export', async (_e, f) => { // Pro: save listening stats etc. through a native Save dialog
-  if (!entitled.has('pro') || !f || typeof f.content !== 'string' || f.content.length > 5e6) return { ok: false };
+ipcMain.handle('file:export', async (_e, f) => { // save stats / pictures / backups through a native Save dialog (everything but a backup needs Pro)
+  if (!f || typeof f.content !== 'string' || f.content.length > 8e6 || (!entitled.has('pro') && f.backup !== true)) return { ok: false };
   const name = String(f.name || 'export.txt').replace(/[^\w.\- ]/g, '_').slice(0, 80);
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name) });
+  const ext = path.extname(name).slice(1).toLowerCase();
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name), filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : [] });
   if (r.canceled || !r.filePath) return { ok: false, canceled: true };
-  try { fs.writeFileSync(r.filePath, f.content, 'utf8'); return { ok: true }; } catch { return { ok: false }; }
+  try { if (f.base64) fs.writeFileSync(r.filePath, Buffer.from(f.content, 'base64')); else fs.writeFileSync(r.filePath, f.content, 'utf8'); return { ok: true }; } catch { return { ok: false }; }
 });
 ipcMain.handle('pro:status', () => proStatus());
 ipcMain.on('art:rejected', (_e, key) => { if (lastArt && lastArt.key === key) lastArt.rejected = true; }); // the player decided it is a logo, not cover art
@@ -501,6 +504,13 @@ ipcMain.on('dev:screensaver', () => { if (devActive) toRenderer('screensaver:req
 ipcMain.on('sleep:set', (_e, mins) => setSleep([0, 15, 30, 60].includes(mins) ? mins : 0));
 ipcMain.on('win:close', () => app.quit());
 ipcMain.on('win:minimize', () => win.hide()); // lives in the tray; click the tray icon to bring it back
+let ghost = false; // click-through: the player floats over other windows and mouse clicks go to whatever is underneath
+function setGhost(on) {
+  if (!win || win.isDestroyed()) return;
+  ghost = !!on; win.setIgnoreMouseEvents(ghost, { forward: true });
+  toRenderer('ghost:state', ghost);
+}
+ipcMain.on('win:ghost', (_e, on) => setGhost(!!on));
 ipcMain.on('win:pin', (_e, on) => setPin(on));
 ipcMain.on('win:mini', (_e, on) => {
   if (full) return;

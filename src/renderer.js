@@ -50,7 +50,7 @@ const livePos = () => {
 };
 
 /* ---------- accent colour from album art ---------- */
-const PALETTE_VARS = ['--accent', '--accent-2', '--veil-a', '--veil-b'];
+const PALETTE_VARS = ['--accent', '--accent-2', '--veil-a', '--veil-b', '--vinyl'];
 const clearPalette = () => PALETTE_VARS.forEach((v) => document.documentElement.style.removeProperty(v));
 
 /* When a song has no real picture, the background is not left empty or purple: it gets a colour of its own, picked from the
@@ -134,6 +134,9 @@ function applyPalette(dataUrl) {
     }
     const st2 = document.documentElement.style;
     st2.setProperty('--accent', a1); st2.setProperty('--accent-2', a2);
+    // the "Album" record takes the cover's own dominant colour (not the lifted accent), kept mid-tone so it still reads as vinyl
+    const vc = first || avg, vm = Math.max(...vc) || 1, vf = vm > 175 ? 175 / vm : vm < 80 ? 80 / vm : 1;
+    st2.setProperty('--vinyl', `rgb(${Math.min(255, vc[0] * vf) | 0},${Math.min(255, vc[1] * vf) | 0},${Math.min(255, vc[2] * vf) | 0})`);
     // brighter frames get a darker veil so the text stays readable; dark frames can show more of the art
     const va = L > 0.6 ? 0.62 : L > 0.4 ? 0.54 : L < 0.15 ? 0.38 : 0.46;
     st2.setProperty('--veil-a', String(va)); st2.setProperty('--veil-b', String(Math.min(0.9, va + 0.37)));
@@ -313,12 +316,14 @@ async function initAudio() {
 }
 if (window.api && !window.api.noLoopback) initAudio();
 
+let calmMode = false; // Calm mode: no spin, no moving ring (set from extras.js)
 const vctx = el.viz.getContext('2d');
+let accentCache = ['#8b5cf6', '#ec4899'], accentAt = -1e9;
 function drawViz(t, playing) {
   const mode = document.documentElement.dataset.viz || 'bars';
   const W = el.viz.width, c = W / 2;
   vctx.clearRect(0, 0, W, W);
-  if (mode === 'off') return;
+  if (mode === 'off' || calmMode) return;
   if (analyser && playing) analyser.getByteFrequencyData(freq);
   for (let i = 0; i < BARS; i++) {
     const m = i < BARS / 2 ? i : BARS - 1 - i; // mirror so the ring is symmetric
@@ -332,8 +337,8 @@ function drawViz(t, playing) {
   const base = W * (118 / 272);
   const maxLen = c - base - (mode === 'cyber' ? 14 : mode === 'nightcity' ? 6 : 3); // keep everything inside the canvas
   const at = (i, r) => { const a = (i / BARS) * Math.PI * 2 - Math.PI / 2; return [c + Math.cos(a) * r, c + Math.sin(a) * r]; };
-  const style = getComputedStyle(document.documentElement);
-  const a1 = style.getPropertyValue('--accent').trim() || '#8b5cf6', a2 = style.getPropertyValue('--accent-2').trim() || '#ec4899';
+  if (t - accentAt > 400) { const cs = getComputedStyle(document.documentElement); accentCache = [cs.getPropertyValue('--accent').trim() || '#8b5cf6', cs.getPropertyValue('--accent-2').trim() || '#ec4899']; accentAt = t; } // reading styles every frame forces a style recalculation
+  const [a1, a2] = accentCache;
   const g = vctx.createLinearGradient(0, 0, W, W); g.addColorStop(0, a1); g.addColorStop(1, a2);
   vctx.lineCap = 'round'; vctx.lineJoin = 'round';
 
@@ -414,22 +419,31 @@ el.vinyl.addEventListener('pointermove', (e) => {
 const endScratch = () => { if (!scratch) return; const p = scratch.pos; scratch = null; document.body.classList.remove('scratching'); seekTo(p); };
 el.vinyl.addEventListener('pointerup', endScratch);
 el.vinyl.addEventListener('pointercancel', endScratch);
+let lastDraw = 0, lastPlayingAt = 0, lastPct = '', lastCur = '', lastDurTxt = '';
 function frame(t) {
+  requestAnimationFrame(frame);
+  const playing = el.card.classList.contains('playing');
+  if (playing) lastPlayingAt = t;
+  // Phones draw at ~30 fps (window.FRAME_MS), and anything sitting still (paused for a while, nothing playing) at 10 fps:
+  // the record and ring look the same but the CPU/GPU and battery do far less.
+  const resting = !playing && vel < .05 && !scratch && !dragging && !needleDrag && t - lastPlayingAt > 2500;
+  const gap = resting ? 100 : (window.FRAME_MS || 0);
+  if (gap && t - lastDraw < gap - 3) return;
+  lastDraw = t;
   const dt = Math.min(.1, (t - last) / 1000); last = t;
-  const target = el.card.classList.contains('playing') ? recordDeg : 0; // eases in and out like a real platter
+  const target = playing && !calmMode ? recordDeg : 0; // eases in and out like a real platter
   vel += (target - vel) * (1 - Math.exp(-dt * (target ? 1.8 : 1.1)));
   if (!scratch || scratch.needle) { if (vel > .05) { angle = (angle + vel * dt) % 360; el.vinyl.style.transform = `rotate(${angle}deg)`; } }
 
-  drawViz(t, el.card.classList.contains('playing'));
+  if (!resting || el.viz.dataset.clean !== '1') { drawViz(t, playing); el.viz.dataset.clean = resting && !levels.some((v) => v > .01) ? '1' : ''; }
   const scrubbing = dragging || scratch;
   const frac = dragging ? dragFrac : scratch ? scratch.pos / (st.dur || 1) : (st.dur > 0 ? livePos() / st.dur : 0);
   const pct = `${(Math.min(1, Math.max(0, frac)) * 100).toFixed(2)}%`;
-  el.fill.style.width = pct; el.knob.style.left = pct;
+  if (pct !== lastPct) { lastPct = pct; el.fill.style.width = pct; el.knob.style.left = pct; }
   const shown = dragging ? frac * st.dur : scratch ? scratch.pos : livePos();
-  el.cur.textContent = st.active ? fmt(shown) : '0:00';
-  el.dur.textContent = st.active && st.dur > 0 ? fmt(st.dur) : '--:--';
+  const curTxt = st.active ? fmt(shown) : '0:00'; if (curTxt !== lastCur) { lastCur = curTxt; el.cur.textContent = curTxt; }
+  const durTxt = st.active && st.dur > 0 ? fmt(st.dur) : '--:--'; if (durTxt !== lastDurTxt) { lastDurTxt = durTxt; el.dur.textContent = durTxt; }
   if (typeof featFrame === 'function') featFrame(t, scrubbing ? shown : livePos());
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 

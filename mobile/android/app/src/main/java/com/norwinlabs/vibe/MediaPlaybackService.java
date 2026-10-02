@@ -5,7 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.IntentFilter;
+import android.media.AudioManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
@@ -29,6 +32,7 @@ import android.util.Base64;
  * Button presses are sent back to the web UI through {@link MediaServicePlugin#dispatch}.
  */
 public class MediaPlaybackService extends Service {
+    private static Context appCtx;
     static final String PREFS = "vibe_media";
     static final String ACTION_PREV = "com.norwinlabs.vibe.PREV";
     static final String ACTION_TOGGLE = "com.norwinlabs.vibe.TOGGLE";
@@ -67,19 +71,30 @@ public class MediaPlaybackService extends Service {
         return new Notification.Action.Builder(Icon.createWithResource(ctx, icon), title, action(ctx, action, code)).build();
     }
 
-    /** Pro: a MediaSession so the lock screen / notification shade / headsets can control playback. */
-    private static void updateSession(Context ctx, Params p) {
+    static Context appContext() { return appCtx; }
+
+    /** One MediaSession shared by the notification, lock screen, headsets and Android Auto. */
+    static synchronized MediaSession ensureSession(Context ctx) {
+        appCtx = ctx.getApplicationContext();
         if (session == null) {
-            session = new MediaSession(ctx, "NorwinVibe");
+            session = new MediaSession(appCtx, "NorwinVibe");
             session.setCallback(new MediaSession.Callback() {
                 @Override public void onPlay() { MediaServicePlugin.dispatch("play", 0); }
                 @Override public void onPause() { MediaServicePlugin.dispatch("pause", 0); }
                 @Override public void onSkipToNext() { MediaServicePlugin.dispatch("next", 0); }
                 @Override public void onSkipToPrevious() { MediaServicePlugin.dispatch("prev", 0); }
                 @Override public void onSeekTo(long pos) { MediaServicePlugin.dispatch("seekTo", pos); }
+                @Override public void onPlayFromMediaId(String mediaId, android.os.Bundle extras) { AutoBrowserService.handlePlay(mediaId); }
+                @Override public void onPlayFromSearch(String query, android.os.Bundle extras) { MediaServicePlugin.dispatchPlay(null, null, query == null ? "" : query); }
             });
             session.setActive(true);
         }
+        return session;
+    }
+
+    /** Pro: keeps the session's song and play state up to date. */
+    private static void updateSession(Context ctx, Params p) {
+        ensureSession(ctx);
         MediaMetadata.Builder md = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, p.title)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, p.text)
@@ -88,7 +103,8 @@ public class MediaPlaybackService extends Service {
         if (lastArt != null) md.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, lastArt);
         session.setMetadata(md.build());
         long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO;
+                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO
+                | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH;
         session.setPlaybackState(new PlaybackState.Builder()
                 .setActions(actions)
                 .setState(p.playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, p.position, p.playing ? 1f : 0f)
@@ -96,6 +112,7 @@ public class MediaPlaybackService extends Service {
     }
 
     private static void releaseSession() {
+        if (AutoBrowserService.alive) return; // Android Auto is still using it
         if (session != null) { try { session.setActive(false); session.release(); } catch (Exception ignored) { } session = null; }
     }
 
@@ -147,6 +164,46 @@ public class MediaPlaybackService extends Service {
                 .putExtra("playing", p.playing).putExtra("pro", p.pro).putExtra("position", p.position).putExtra("duration", p.duration);
     }
 
+    /* Headphones unplugged / Bluetooth dropped: pause instead of blasting the speaker.
+       Calls and other apps: pause (or lower the volume) while they speak, then carry on. */
+    private boolean pausedByFocus = false, ducked = false, focusHeld = false;
+    private final BroadcastReceiver noisy = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) MediaServicePlugin.dispatch("pause", 0);
+        }
+    };
+    private final AudioManager.OnAudioFocusChangeListener focusListener = (change) -> {
+        switch (change) {
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                pausedByFocus = true; MediaServicePlugin.dispatch("pause", 0); break;
+            case AudioManager.AUDIOFOCUS_LOSS:
+                pausedByFocus = false; MediaServicePlugin.dispatch("pause", 0); break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                ducked = true; MediaServicePlugin.dispatch("duck", 0); break;
+            case AudioManager.AUDIOFOCUS_GAIN:
+                if (pausedByFocus) { pausedByFocus = false; MediaServicePlugin.dispatch("play", 0); }
+                if (ducked) { ducked = false; MediaServicePlugin.dispatch("unduck", 0); }
+                break;
+            default: break;
+        }
+    };
+
+    @SuppressWarnings("deprecation")
+    private void takeFocus() {
+        if (focusHeld) return;
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am != null) focusHeld = am.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        try { registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)); } catch (Exception ignored) { }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void dropFocus() {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am != null && focusHeld) am.abandonAudioFocus(focusListener);
+        focusHeld = false;
+        try { unregisterReceiver(noisy); } catch (Exception ignored) { }
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Params p = new Params();
@@ -165,6 +222,7 @@ public class MediaPlaybackService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTIFICATION_ID, n);
         running = true;
+        if (p.playing) takeFocus();
         if (wakeLock == null) { // keeps the CPU awake so audio does not stutter with the screen off
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NorwinVibe:playback");
@@ -177,6 +235,7 @@ public class MediaPlaybackService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        dropFocus();
         releaseSession();
         getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("playing", false).apply();
         NowPlayingWidget.refreshAll(this);

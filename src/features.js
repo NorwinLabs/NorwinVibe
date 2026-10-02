@@ -40,10 +40,11 @@ function showPrefs() {
   const prevTheme = root.dataset.theme;
   root.dataset.theme = (typeof effectiveTheme === 'function' && effectiveTheme()) || P.theme || 'art'; // Pro: time-of-day themes override what is shown, not what is saved
   if (prevTheme && prevTheme !== root.dataset.theme) applyPalette(el.label.classList.contains('art') ? art.data : '');
-  root.dataset.record = P.record || 'vinyl';
+  const L = (typeof songLook === 'function' && songLook()) || {}; // a look remembered for this song wins over the global one
+  root.dataset.record = L.record || P.record || 'vinyl';
   root.dataset.bgart = P.bgart || 'cover';
-  root.dataset.needle = P.needle || 'classic';
-  root.dataset.viz = P.viz || 'bars';
+  root.dataset.needle = L.needle || P.needle || 'classic';
+  root.dataset.viz = L.viz || P.viz || 'bars';
   root.dataset.fade = P.fade ? 'on' : 'off';
   document.body.classList.toggle('no-lyrics', !P.lyrics);
   document.querySelectorAll('.chips[data-pref]').forEach((c) => c.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === P[c.dataset.pref])));
@@ -52,8 +53,10 @@ function showPrefs() {
   $('sw-pin').classList.toggle('on', pinned);
   refreshDev();
   if (typeof refreshPro === 'function') refreshPro();
+  if (typeof extrasRefresh === 'function') extrasRefresh();
 }
 function setPref(k, v) {
+  if (typeof onLookPref === 'function') onLookPref(k, v);
   P[k] = v; bridge.setPrefs({ [k]: v }); showPrefs();
   if (k === 'theme') applyPalette(el.label.classList.contains('art') ? art.data : '');
   if (k === 'lyrics') { if (v) loadLyrics(st, curDisplay); else clearLyrics(); }
@@ -202,6 +205,7 @@ function onStateExtra(m) {
 
 /* ---------- lyrics ---------- */
 let lyr = { token: 0, lines: [], synced: false, idx: -1 };
+let lyrOff = 0; // seconds: this song's lyrics timing nudge (extras.js)
 let curDisplay = null;
 const lyricEl = $('lyric'), lyricsBox = $('lyrics');
 
@@ -318,7 +322,7 @@ armEl.addEventListener('pointercancel', endNeedle);
 function featFrame(t, pos) {
   updateArm(t, pos);
   if (!lyr.synced) return;
-  const i = lineAt(pos + 0.25);
+  const i = lineAt(pos + 0.25 + lyrOff);
   if (i === lyr.idx) return;
   if (lyr.idx >= 0 && lyr.lines[lyr.idx].el) lyr.lines[lyr.idx].el.classList.remove('on');
   lyr.idx = i;
@@ -367,6 +371,7 @@ function onTrackChange(m, d) {
   if (prev) curEntry.thumb = prev.thumb || '';
   saveEntry(curEntry);
   $('btn-fav').classList.toggle('on', isFav(curId));
+  if (typeof onSongChanged === 'function') onSongChanged();
   loadLyrics(m, d);
   const key = m.key;
   setTimeout(() => { // give album art a moment to arrive before notifying
@@ -391,9 +396,11 @@ $('btn-fav').onclick = () => {
 
 function renderHistory() {
   const box = $('hist-list'); box.textContent = '';
-  const list = store.get(histTab === 'favs' ? 'nv.favs' : 'nv.history');
+  const hq = (($('hist-q') || {}).value || '').trim().toLowerCase();
+  const all = store.get(histTab === 'favs' ? 'nv.favs' : 'nv.history');
+  const list = hq ? all.filter((e) => `${e.title} ${e.artist || ''} ${e.app || ''}`.toLowerCase().includes(hq)) : all;
   document.querySelectorAll('#hist-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.v === histTab));
-  $('hist-clear').style.display = histTab === 'recent' && list.length ? '' : 'none';
+  $('hist-clear').style.display = histTab === 'recent' && all.length ? '' : 'none';
   if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = histTab === 'favs' ? 'Tap ★ on a song to keep it here' : 'Nothing played yet'; box.appendChild(e); return; }
   const favIds = new Set(store.get('nv.favs').map((e) => e.id));
   for (const e of list) {
@@ -414,6 +421,7 @@ function renderHistory() {
     row.append(th, tx, star); box.appendChild(row);
   }
 }
+$('hist-q').oninput = () => renderHistory();
 document.querySelectorAll('#hist-tabs button').forEach((b) => { b.onclick = () => { histTab = b.dataset.v; renderHistory(); }; });
 $('hist-clear').onclick = () => { store.set('nv.history', []); renderHistory(); };
 

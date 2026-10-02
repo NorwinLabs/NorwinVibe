@@ -88,6 +88,8 @@
 
   <div class="credit" id="credit"><span>NorwinVibe by Gavin Norwood</span><button id="credit-ver" class="ver" title="Version"></button></div>
 
+  <div class="tour" id="tour" hidden><div class="tour-card"><b id="tour-t"></b><p id="tour-p"></p><div class="tour-foot"><span id="tour-dots"></span><button class="act" id="tour-skip">Skip</button><button class="act" id="tour-next">Next</button></div></div></div>
+
   <div class="hud" id="hud"></div>
 
   <!-- settings: Look = how it looks, Player = how it behaves, Pro = paid extras, About = updates, hotkeys, developer -->
@@ -105,7 +107,7 @@
       </div>
       <h4>Record</h4>
       <div class="chips" data-pref="record">
-        <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+        <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="album" title="The record takes the colour of the album cover">Album</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
       </div>
       <h4>Record speed</h4>
       <div class="chips" data-pref="speed">
@@ -120,6 +122,9 @@
         <button data-v="bars">Bars</button><button data-v="dots">Dots</button><button data-v="wave">Wave</button><button data-v="off">Off</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
       </div>
       <button class="act store-btn" id="btn-store">Theme Store</button>
+    <h4>This song</h4>
+    <div class="act-row first"><button class="act" id="btn-look-save" title="Keep the current record, needle and visualizer for this song">Remember this look</button><button class="act" id="btn-look-clear">Forget</button></div>
+    <p class="hint" id="look-msg"></p>
     </div>
 
     <div class="sp" data-tab="player">
@@ -130,17 +135,25 @@
       <div class="chips" id="sleep-chips">
         <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
       </div>
+      <h4>Lyrics timing <small id="lyr-off-n"></small></h4>
+      <div class="chips" id="lyr-chips"><button data-v="-0.5">&minus;0.5 s</button><button data-v="0">Reset</button><button data-v="0.5">+0.5 s</button></div>
+      <p class="hint desk-only">Saved for this song. The [ and ] keys nudge it too.</p>
+      <h4>Accessibility</h4>
+      <button class="sw" id="sw-calm"><span>Calm mode <small>no spinning or motion</small></span><i></i></button>
+      <button class="sw" id="sw-big"><span>Larger text</span><i></i></button>
       <h4 class="desk-only">Window</h4>
       <button class="sw" data-pref="fade"><span>Fade when not hovered</span><i></i></button>
       <button class="sw" data-pref="snap"><span>Snap to screen edges</span><i></i></button>
       <button class="sw" data-pref="autostart"><span>Start with Windows</span><i></i></button>
       <button class="sw" id="sw-pin"><span>Always on top</span><i></i></button>
+      <button class="sw desk-only" id="sw-ghost"><span>Click-through <small>Ctrl+Alt+G turns it off</small></span><i></i></button>
       <h4>View</h4>
       <div class="act-row first">
         <button class="act" id="btn-full" title="F or F11">Full screen</button>
         <button class="act" id="btn-ambient" title="A">Ambient</button>
         <button class="act" id="btn-tray">Hide to tray</button>
       </div>
+      <button class="sw mob-only" id="sw-car"><span>Car mode <small>big buttons</small></span><i></i></button>
     </div>
 
     <div class="sp" data-tab="pro">
@@ -162,6 +175,11 @@
         <p class="hint desk-only" id="discord-msg"></p>
         <button class="act mob-only" id="btn-eq">Equalizer &amp; crossfade</button>
         <button class="sw pro mob-only" data-pref="smartshuffle"><span>Smart shuffle</span><i></i></button>
+      <h4>Custom colours</h4>
+      <button class="sw pro" id="sw-custom"><span>Use my own colours</span><i></i></button>
+      <div class="auto-row" id="custom-row"><label>Accent<input type="color" id="cc-a" value="#8b5cf6"></label><label>Second<input type="color" id="cc-b" value="#ec4899"></label></div>
+      <h4>Share</h4>
+      <div class="act-row first"><button class="act" id="btn-share">Song card</button><button class="act" id="btn-recap">Listening recap</button></div>
       </div>
     </div>
 
@@ -169,8 +187,12 @@
       <h4>Updates</h4>
       <div class="act-row first"><button class="act" id="btn-update">Check for updates</button></div>
       <p class="hint" id="update-msg"></p>
+      <h4>Backup</h4>
+      <div class="act-row first"><button class="act" id="btn-backup" title="History, favourites, stats and looks">Export</button><button class="act" id="btn-restore">Import</button></div>
+      <input type="file" id="restore-file" accept=".json,application/json" hidden>
+      <div class="act-row"><button class="act" id="btn-tour">Show the tour</button></div>
       <h4 class="desk-only">Hotkeys</h4>
-      <p class="hint desk-only">Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+      <p class="hint desk-only">Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide, G click-through<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
       <div class="dev-panel" id="dev-panel" hidden>
         <h4>Developer</h4>
         <button class="sw" id="dev-asfree"><span>Act as a free user <small>test the locked state</small></span><i></i></button>
@@ -193,6 +215,7 @@
     <div id="st-top" class="hist"></div>
     <h4>Top artists</h4>
     <div id="st-artists" class="hist"></div>
+    <div class="act-row"><button class="act" id="st-share">Share recap picture</button></div>
     <div class="act-row"><button class="act" id="st-csv">Export CSV</button><button class="act" id="st-json">Export JSON</button></div>
     <div class="act-row"><button class="act" id="st-reset">Reset stats</button></div>
   </div>
@@ -209,6 +232,7 @@
   <!-- history & favourites -->
   <div class="pop" id="pop-history">
     <div class="chips tabs" id="hist-tabs"><button data-v="recent" class="on">Recent</button><button data-v="favs">Favourites</button></div>
+    <input id="hist-q" class="search" type="search" placeholder="Search" spellcheck="false" autocomplete="off">
     <div id="hist-list" class="hist"></div>
     <button class="act" id="hist-clear">Clear recent</button>
   </div>
@@ -217,5 +241,6 @@
 <script src="renderer.js"></script>
 <script src="features.js"></script>
 <script src="pro.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>
