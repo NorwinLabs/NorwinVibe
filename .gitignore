@@ -2,3 +2,4 @@ node_modules/
 .licensing/
 dist/
 PERSONAL.md
+.signing/
