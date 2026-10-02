@@ -16,7 +16,7 @@ const fs = require('fs');
 const APP_ID = 'com.norwinlabs.vibe.desktop'; // must equal build.appId in package.json
 app.setAppUserModelId(APP_ID);
 
-const SIZES = { full: { w: 360, h: 560 }, mini: { w: 360, h: 124 } };
+const SIZES = { full: { w: 360, h: 560 }, mini: { w: 420, h: 124 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
   autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };

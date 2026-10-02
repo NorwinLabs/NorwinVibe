@@ -77,90 +77,109 @@
     <button class="ctl tiny" id="btn-repeat" title="Repeat" aria-label="Repeat">
       <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/><text x="12" y="14.8" text-anchor="middle" class="one">1</text></svg>
     </button>
+    <div class="volline">
+      <div class="vol-row">
+        <button class="wbtn" id="btn-mute" title="Mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 010 6M19.5 6.5a8 8 0 010 11"/></svg></button>
+        <input type="range" id="vol" min="0" max="100" step="1" value="50">
+        <span id="vol-n">50</span>
+      </div>
+    </div>
   </section>
 
   <div class="credit" id="credit"><span>NorwinVibe by Gavin Norwood</span><button id="credit-ver" class="ver" title="Version"></button></div>
 
   <div class="hud" id="hud"></div>
 
-  <!-- settings -->
+  <!-- settings: Look = how it looks, Player = how it behaves, Pro = paid extras, About = updates, hotkeys, developer -->
   <div class="pop" id="pop-settings">
-    <h4>Card theme</h4>
-    <div class="chips" data-pref="theme">
-      <button data-v="art">Album</button><button data-v="midnight">Midnight</button><button data-v="retro">Retro</button><button data-v="neon">Neon</button><button data-v="cyberpunk" data-paid="cyberpunk">Cyberpunk</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
-    </div>
-    <h4>Background</h4>
-    <div class="chips" data-pref="bgart">
-      <button data-v="cover" title="Show the album cover / video thumbnail">Cover</button><button data-v="soft" title="Heavily blurred, colours only">Soft</button><button data-v="off" title="No picture, just colours">Off</button>
-    </div>
-    <h4>Record</h4>
-    <div class="chips" data-pref="record">
-      <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
-    </div>
-    <h4>Record speed</h4>
-    <div class="chips" data-pref="speed">
-      <button data-v="slow" title="about 16 rpm">Slow</button><button data-v="relaxed" title="about 21 rpm">Relaxed</button><button data-v="33" title="33&#8531; rpm, a real LP">33&#8531; RPM</button><button data-v="45" title="45 rpm, a real single">45 RPM</button>
-    </div>
-    <h4>Needle</h4>
-    <div class="chips" data-pref="needle">
-      <button data-v="classic">Classic</button><button data-v="gold">Gold</button><button data-v="minimal">Minimal</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
-    </div>
-    <h4>Visualizer</h4>
-    <div class="chips" data-pref="viz">
-      <button data-v="bars">Bars</button><button data-v="dots">Dots</button><button data-v="wave">Wave</button><button data-v="off">Off</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
-    </div>
-    <button class="act store-btn" id="btn-store">Theme Store</button>
-    <h4>Volume</h4>
-    <div class="vol-row">
-      <button class="wbtn" id="btn-mute" title="Mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 010 6M19.5 6.5a8 8 0 010 11"/></svg></button>
-      <input type="range" id="vol" min="0" max="100" step="1" value="50">
-      <span id="vol-n">50</span>
-    </div>
-    <h4>Options</h4>
-    <button class="sw" data-pref="lyrics"><span>Show lyrics</span><i></i></button>
-    <button class="sw" data-pref="toasts"><span>Song-change notifications <small>when hidden</small></span><i></i></button>
-    <button class="sw" data-pref="fade"><span>Fade when not hovered</span><i></i></button>
-    <button class="sw" data-pref="snap"><span>Snap to screen edges</span><i></i></button>
-    <button class="sw" data-pref="autostart"><span>Start with Windows</span><i></i></button>
-    <button class="sw" id="sw-pin"><span>Always on top</span><i></i></button>
-    <h4>Sleep timer <small id="sleep-left"></small></h4>
-    <div class="chips" id="sleep-chips">
-      <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
-    </div>
-    <div class="pro-block" id="pro-block">
-      <h4>Pro <small id="pro-state"></small></h4>
-      <button class="act" id="btn-stats">Listening stats</button>
-      <button class="sw pro" data-pref="autotheme"><span>Time-of-day themes</span><i></i></button>
-      <div class="auto-row" id="auto-row">
-        <label>Day<select data-pref="autoDay"></select></label>
-        <label>Evening<select data-pref="autoEve"></select></label>
-        <label>Night<select data-pref="autoNight"></select></label>
+    <div class="chips tabs sp-tabs" id="sp-tabs"><button data-v="look">Look</button><button data-v="player">Player</button><button data-v="pro">Pro</button><button data-v="about">About</button></div>
+
+    <div class="sp" data-tab="look">
+      <h4>Theme</h4>
+      <div class="chips" data-pref="theme">
+        <button data-v="art">Album</button><button data-v="midnight">Midnight</button><button data-v="retro">Retro</button><button data-v="neon">Neon</button><button data-v="cyberpunk" data-paid="cyberpunk">Cyberpunk</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
       </div>
-      <button class="sw pro" data-pref="fadeout"><span>Fade out when the sleep timer ends</span><i></i></button>
-      <button class="sw pro desk-only" data-pref="screensaver"><span>Screensaver <small>Ambient mode when idle</small></span><i></i></button>
-      <div class="chips pro desk-only" data-pref="ssMin" id="ss-chips"><button data-v="1">1 min</button><button data-v="3">3 min</button><button data-v="5">5 min</button><button data-v="10">10 min</button></div>
-      <button class="sw pro desk-only" data-pref="obs"><span>OBS overlay</span><i></i></button>
-      <p class="hint desk-only" id="obs-url"></p>
-      <button class="sw pro desk-only" data-pref="discord"><span>Discord status</span><i></i></button>
-      <p class="hint desk-only" id="discord-msg"></p>
-      <button class="act mob-only" id="btn-eq">Equalizer &amp; crossfade</button>
-      <button class="sw pro mob-only" data-pref="smartshuffle"><span>Smart shuffle</span><i></i></button>
+      <h4>Background</h4>
+      <div class="chips" data-pref="bgart">
+        <button data-v="cover" title="Show the album cover / video thumbnail">Cover</button><button data-v="soft" title="Heavily blurred, colours only">Soft</button><button data-v="off" title="No picture, just colours">Off</button>
+      </div>
+      <h4>Record</h4>
+      <div class="chips" data-pref="record">
+        <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+      </div>
+      <h4>Record speed</h4>
+      <div class="chips" data-pref="speed">
+        <button data-v="slow" title="about 16 rpm">Slow</button><button data-v="relaxed" title="about 21 rpm">Relaxed</button><button data-v="33" title="33&#8531; rpm, a real LP">33&#8531; RPM</button><button data-v="45" title="45 rpm, a real single">45 RPM</button>
+      </div>
+      <h4>Needle</h4>
+      <div class="chips" data-pref="needle">
+        <button data-v="classic">Classic</button><button data-v="gold">Gold</button><button data-v="minimal">Minimal</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+      </div>
+      <h4>Visualizer</h4>
+      <div class="chips" data-pref="viz">
+        <button data-v="bars">Bars</button><button data-v="dots">Dots</button><button data-v="wave">Wave</button><button data-v="off">Off</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
+      </div>
+      <button class="act store-btn" id="btn-store">Theme Store</button>
     </div>
-    <div class="act-row">
-      <button class="act" id="btn-full" title="F or F11">Full screen</button>
-      <button class="act" id="btn-ambient" title="A">Ambient</button>
+
+    <div class="sp" data-tab="player">
+      <h4>Playback</h4>
+      <button class="sw" data-pref="lyrics"><span>Show lyrics</span><i></i></button>
+      <button class="sw" data-pref="toasts"><span>Song-change notifications <small>when hidden</small></span><i></i></button>
+      <h4>Sleep timer <small id="sleep-left"></small></h4>
+      <div class="chips" id="sleep-chips">
+        <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
+      </div>
+      <h4 class="desk-only">Window</h4>
+      <button class="sw" data-pref="fade"><span>Fade when not hovered</span><i></i></button>
+      <button class="sw" data-pref="snap"><span>Snap to screen edges</span><i></i></button>
+      <button class="sw" data-pref="autostart"><span>Start with Windows</span><i></i></button>
+      <button class="sw" id="sw-pin"><span>Always on top</span><i></i></button>
+      <h4>View</h4>
+      <div class="act-row first">
+        <button class="act" id="btn-full" title="F or F11">Full screen</button>
+        <button class="act" id="btn-ambient" title="A">Ambient</button>
+        <button class="act" id="btn-tray">Hide to tray</button>
+      </div>
     </div>
-    <div class="act-row"><button class="act" id="btn-tray">Hide to tray</button><button class="act" id="btn-update">Check for updates</button></div>
-    <p class="hint" id="update-msg"></p>
-    <div class="dev-panel" id="dev-panel" hidden>
-      <h4>Developer</h4>
-      <button class="sw" id="dev-asfree"><span>Act as a free user <small>test the locked state</small></span><i></i></button>
-      <div class="act-row"><button class="act" id="dev-tools">DevTools</button><button class="act" id="dev-fakeupd">Fake update</button></div>
-      <div class="act-row"><button class="act" id="dev-ss">Test screensaver</button></div>
-      <p class="hint" id="dev-info"></p>
-      <div class="act-row"><button class="act" id="dev-signout">Turn dev mode off</button></div>
+
+    <div class="sp" data-tab="pro">
+      <div class="pro-block" id="pro-block">
+        <h4>Pro <small id="pro-state"></small></h4>
+        <button class="act" id="btn-stats">Listening stats</button>
+        <button class="sw pro" data-pref="autotheme"><span>Time-of-day themes</span><i></i></button>
+        <div class="auto-row" id="auto-row">
+          <label>Day<select data-pref="autoDay"></select></label>
+          <label>Evening<select data-pref="autoEve"></select></label>
+          <label>Night<select data-pref="autoNight"></select></label>
+        </div>
+        <button class="sw pro" data-pref="fadeout"><span>Fade out when the sleep timer ends</span><i></i></button>
+        <button class="sw pro desk-only" data-pref="screensaver"><span>Screensaver <small>Ambient mode when idle</small></span><i></i></button>
+        <div class="chips pro desk-only" data-pref="ssMin" id="ss-chips"><button data-v="1">1 min</button><button data-v="3">3 min</button><button data-v="5">5 min</button><button data-v="10">10 min</button></div>
+        <button class="sw pro desk-only" data-pref="obs"><span>OBS overlay</span><i></i></button>
+        <p class="hint desk-only" id="obs-url"></p>
+        <button class="sw pro desk-only" data-pref="discord"><span>Discord status</span><i></i></button>
+        <p class="hint desk-only" id="discord-msg"></p>
+        <button class="act mob-only" id="btn-eq">Equalizer &amp; crossfade</button>
+        <button class="sw pro mob-only" data-pref="smartshuffle"><span>Smart shuffle</span><i></i></button>
+      </div>
     </div>
-    <p class="hint">Hotkeys: Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+
+    <div class="sp" data-tab="about">
+      <h4>Updates</h4>
+      <div class="act-row first"><button class="act" id="btn-update">Check for updates</button></div>
+      <p class="hint" id="update-msg"></p>
+      <h4 class="desk-only">Hotkeys</h4>
+      <p class="hint desk-only">Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+      <div class="dev-panel" id="dev-panel" hidden>
+        <h4>Developer</h4>
+        <button class="sw" id="dev-asfree"><span>Act as a free user <small>test the locked state</small></span><i></i></button>
+        <div class="act-row"><button class="act" id="dev-tools">DevTools</button><button class="act" id="dev-fakeupd">Fake update</button></div>
+        <div class="act-row"><button class="act" id="dev-ss">Test screensaver</button></div>
+        <p class="hint" id="dev-info"></p>
+        <div class="act-row"><button class="act" id="dev-signout">Turn dev mode off</button></div>
+      </div>
+    </div>
   </div>
 
   <!-- listening stats (Pro) -->

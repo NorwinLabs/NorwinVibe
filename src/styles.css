@@ -112,7 +112,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .bar { position: relative; flex: 1; height: 18px; cursor: pointer; -webkit-app-region: no-drag; }
 .bar::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.16); transition: height .2s, top .2s; }
 .fill { position: absolute; left: 0; top: 7px; height: 4px; border-radius: 4px; width: 0; transition: height .2s, top .2s;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent-2) 80%, white)); }
+  background: var(--accent); }
 .knob { position: absolute; top: 9px; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,.5); transform: scale(0); transition: transform .2s var(--ease); }
 .bar:hover::before, .bar:hover .fill, .bar.drag::before, .bar.drag .fill { height: 6px; top: 6px; }
@@ -120,7 +120,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .bar.off { pointer-events: none; opacity: .5; }
 
 /* ---------- controls ---------- */
-.controls { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; }
 .ctl { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; transition: transform .25s var(--ease), background .2s, opacity .2s; }
 .ctl svg { width: 24px; height: 24px; }
 .ctl svg .solid { fill: currentColor; }
@@ -143,7 +143,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .idle .progress, .idle .ctl:not(.play) { opacity: .35; pointer-events: none; }
 
 /* ---------- mini mode ---------- */
-.mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr auto; grid-template-areas: "stage meta controls" "stage progress progress";
+.mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr 116px; grid-template-areas: "stage meta controls" "stage progress progress";
   align-items: center; column-gap: 14px; padding: 12px 14px 10px 14px; border-radius: 24px; }
 .mini .card > .top { position: absolute; top: 4px; right: 8px; height: 20px; z-index: 3; }
 .mini .source, .mini .arm, .mini .glow, .mini .time { display: none; }

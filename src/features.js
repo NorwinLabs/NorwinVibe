@@ -17,6 +17,22 @@ $('btn-settings').onclick = (e) => { e.stopPropagation(); togglePop('settings');
 $('btn-history').onclick = (e) => { e.stopPropagation(); togglePop('history'); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.pop')) closePops(); });
 
+/* settings tabs (Look / Player / Pro / About); the last one used is remembered */
+(function settingsTabs() {
+  const tabs = document.querySelectorAll('#sp-tabs button'), panes = document.querySelectorAll('#pop-settings .sp');
+  let cur = 'look'; try { cur = localStorage.getItem('nv.settingsTab') || 'look'; } catch {}
+  const show = (name) => {
+    if (![...panes].some((p) => p.dataset.tab === name)) name = 'look';
+    tabs.forEach((b) => b.classList.toggle('on', b.dataset.v === name));
+    panes.forEach((p) => p.classList.toggle('show', p.dataset.tab === name));
+    pops.settings.scrollTop = 0;
+    try { localStorage.setItem('nv.settingsTab', name); } catch {}
+  };
+  tabs.forEach((b) => { b.onclick = () => show(b.dataset.v); });
+  window.openSettingsTab = (name) => { show(name); };
+  show(cur);
+})();
+
 /* ---------- preferences ---------- */
 const SPEEDS = { slow: 96, relaxed: 126, '33': 200, '45': 270 }; // deg/s: ~16, 21, 33.3 and 45 rpm
 function showPrefs() {
