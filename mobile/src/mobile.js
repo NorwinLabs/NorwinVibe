@@ -164,6 +164,7 @@
     if (t.art || t.artTried || !t.path) return; t.artTried = true;
     try { const tags = await readTags(blob); if (tags.picture) t.art = (await thumb(tags.picture)) || ''; } catch {}
     dbDo('meta', 'readwrite', (s) => s.put(t)).catch(() => {}); // also remembers "no cover" so it is not read again
+    if (t.art && cur && cur.id === t.id) { emitArt(); setSession(); pushNative(true); } // finished after the song started (slow file): show it now
   }
   // the cover is read BEFORE the song is announced, so the picture never pops in after the title (that was the flicker)
   const artFirst = (t, blob) => Promise.race([lazyArt(t, blob), new Promise((r) => setTimeout(r, 1500))]);
