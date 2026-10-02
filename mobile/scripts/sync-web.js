@@ -60,6 +60,16 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
   </div>
 
   <!-- theme store -->`);
+sub('  <!-- theme store -->', `  <!-- mini player: sits at the bottom while a panel (library, history, settings) is open -->
+  <div id="mini-player" aria-label="Now playing">
+    <div class="mp-info" role="button" aria-label="Open the player"><div class="mp-art"></div><div class="mp-tx"><b class="mp-title"></b><span class="mp-artist"></span></div></div>
+    <button class="mp-btn mp-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6v12M19 6l-9 6 9 6z"/></svg></button>
+    <button class="mp-btn mp-play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="mp-btn mp-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M18 6v12M5 6l9 6-9 6z"/></svg></button>
+    <div class="mp-bar"><i></i></div>
+  </div>
+
+  <!-- theme store -->`);
 sub('<script src="titles.js"></script>', '<script src="vendor/nacl-fast.min.js"></script>\n<script src="vendor/jsmediatags.min.js"></script>\n<script src="config.js"></script>\n<script src="mobile.js"></script>\n<script src="titles.js"></script>');
 fs.writeFileSync(path.join(www, 'index.html'), html);
 

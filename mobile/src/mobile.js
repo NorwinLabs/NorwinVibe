@@ -160,11 +160,11 @@
   }
   async function lazyArt(t, blob) { // scanned songs have no cover yet: read it from the file the first time it plays
     if (t.art || t.artTried || !t.path) return; t.artTried = true;
-    const tags = await readTags(blob); if (!tags.picture) return;
-    const art = await thumb(tags.picture); if (!art) return;
-    t.art = art; dbDo('meta', 'readwrite', (s) => s.put(Object.assign({}, t, { artTried: undefined }))).catch(() => {});
-    if (cur && cur.id === t.id) emitArt();
+    try { const tags = await readTags(blob); if (tags.picture) t.art = (await thumb(tags.picture)) || ''; } catch {}
+    dbDo('meta', 'readwrite', (s) => s.put(t)).catch(() => {}); // also remembers "no cover" so it is not read again
   }
+  // the cover is read BEFORE the song is announced, so the picture never pops in after the title (that was the flicker)
+  const artFirst = (t, blob) => Promise.race([lazyArt(t, blob), new Promise((r) => setTimeout(r, 1500))]);
   async function removeTrack(id) {
     await dbMulti(['meta', 'blobs'], (m, b) => { m.delete(id); b.delete(id); });
     lib = lib.filter((t) => t.id !== id);
@@ -250,11 +250,24 @@
     xfading = false;
     decks.forEach((d, i) => { if (i !== active) d.pause(); });
     if (ensureGraph()) { deckGain.forEach((g, i) => { g.gain.cancelScheduledValues(0); g.gain.value = i === active ? 1 : 0; }); await resumeCtx(); }
-    setDeckSrc(active, blob); cur = t; idx = order.indexOf(id);
-    emitArt(); setSession(); lazyArt(t, blob);
+    await artFirst(t, blob);
+    setDeckSrc(active, blob); cur = t; idx = order.indexOf(id); rememberLast();
+    emitArt(); setSession();
     if (autoplay) { try { await audio.play(); startBackground(); } catch { toast('Tap play to start'); } }
     emit(); pushNative(true);
   }
+  /* the play button with nothing loaded: carry on from what was playing last (its playlist if it came from one), else the library */
+  const rememberLast = () => { if (cur) LS.set('vibe.last', { src: source, id: cur.id }); };
+  function startPlayback() {
+    if (!lib.length) { openLibrary(); return; }
+    const last = LS.get('vibe.last', null);
+    if (last && last.src && last.src.type === 'playlist' && sourceIds2(last.src.id).length) source = { type: 'playlist', id: last.src.id };
+    else source = { type: 'library', id: null };
+    buildOrder(); if (!order.length) { source = { type: 'library', id: null }; buildOrder(); }
+    const id = last && order.includes(last.id) ? last.id : (shuffle ? order[Math.floor(Math.random() * order.length)] : order[0]);
+    playId(id, true);
+  }
+  const sourceIds2 = (pid) => (playlists.find((p) => p.id === pid) || { ids: [] }).ids.filter((x) => lib.some((t) => t.id === x));
   function playId(id, keepOrder) { if (!keepOrder || !order.includes(id)) buildOrder(id); return loadTrack(id, true); }
   const peekNext = () => { if (!order.length || repeat === 'Track') return null; let i = idx + 1; if (i >= order.length) { if (repeat === 'List') i = 0; else return null; } return order[i]; };
   function next() {
@@ -277,7 +290,7 @@
     xfading = true;
     try {
       const blob = await getBlob(t).catch(() => null); if (!blob || !ensureGraph()) { xfading = false; return; }
-      await resumeCtx();
+      await artFirst(t, blob); await resumeCtx();
       const oldDeck = active, other = 1 - active, secs = fx.xfade, now = ctx.currentTime;
       setDeckSrc(other, blob); decks[other].currentTime = 0;
       deckGain[other].gain.cancelScheduledValues(now); deckGain[other].gain.setValueAtTime(0, now);
@@ -286,7 +299,7 @@
       deckGain[oldDeck].gain.cancelScheduledValues(t0); deckGain[oldDeck].gain.setValueAtTime(deckGain[oldDeck].gain.value, t0); deckGain[oldDeck].gain.linearRampToValueAtTime(0, t0 + secs);
       deckGain[other].gain.linearRampToValueAtTime(1, t0 + secs);
       idx = order.indexOf(nextId); cur = t; useDeck(other);       // the new song is "current" straight away
-      emitArt(); setSession(); emit(); pushNative(true); lazyArt(t, blob);
+      emitArt(); setSession(); emit(); pushNative(true); rememberLast();
       setTimeout(() => { decks[oldDeck].pause(); xfading = false; }, secs * 1000 + 150);
     } catch { xfading = false; }
   }
@@ -349,7 +362,8 @@
   function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; } }, 60000); }
   if (bg && bg.addListener) bg.addListener('action', (e) => { // buttons on the notification / lock screen / widget
     const a = e && e.action;
-    if (a === 'play') audio.play(); else if (a === 'pause') audio.pause(); else if (a === 'toggle') (audio.paused ? audio.play() : audio.pause());
+    if ((a === 'play' || a === 'toggle') && !cur) startPlayback();
+    else if (a === 'play') audio.play(); else if (a === 'pause') audio.pause(); else if (a === 'toggle') (audio.paused ? audio.play() : audio.pause());
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
   });
 
@@ -428,12 +442,12 @@
   /* ================= the bridge the shared UI talks to ================= */
   const storeCfg = () => window.STORE_CONFIG || { items: {} };
   window.api = {
-    noLoopback: true, idleText: 'Add music from your phone to get started',
+    idlePlay: () => startPlayback(), noLoopback: true, idleText: 'Add music from your phone to get started',
     onState: (f) => { cb.state = f; }, onArt: (f) => { cb.art = f; }, onPin: () => {}, onSleep: (f) => { cb.sleep = f; }, onOwned: (f) => { cb.owned = f; },
     cmd: (c) => {
       const [k, v] = String(c).split(':');
-      if (k === 'toggle') { if (!cur) { if (lib.length) playId(lib[0].id); else openLibrary(); } else if (audio.paused) audio.play(); else audio.pause(); }
-      else if (k === 'play') audio.play(); else if (k === 'pause') audio.pause();
+      if (k === 'toggle') { if (!cur) startPlayback(); else if (audio.paused) audio.play(); else audio.pause(); }
+      else if (k === 'play') { if (!cur) startPlayback(); else audio.play(); } else if (k === 'pause') audio.pause();
       else if (k === 'next') next(); else if (k === 'prev') prev();
       else if (k === 'seek') { audio.currentTime = parseFloat(v) || 0; emit(); }
       else if (k === 'shuffle') { shuffle = v === '1'; buildOrder(cur && cur.id); emit(); }
@@ -616,6 +630,28 @@
     queue: () => order.map((id) => (lib.find((t) => t.id === id) || {}).title), // the order songs will play in (also used by tests)
     debug: () => ({ ctx: ctx ? ctx.state : null, eqGains: filters.map((f) => Math.round(f.gain.value * 10) / 10), deckGains: deckGain.map((g) => Math.round(g.gain.value * 100) / 100), active, playing: decks.map((d) => !d.paused), xfading, title: cur && cur.title }),
   };
+
+  /* ================= mini player (shown under any open panel: library, history, settings) ================= */
+  const mp = $('mini-player');
+  if (mp) {
+    const q = (s) => mp.querySelector(s), mpPlay = q('.mp-play'), mpBar = q('.mp-bar i');
+    const syncMini = () => {
+      if (!cur) return;
+      q('.mp-title').textContent = cur.title; q('.mp-artist').textContent = cur.artist || 'Unknown artist';
+      q('.mp-art').style.backgroundImage = cur.art ? `url("${cur.art}")` : '';
+      mpPlay.innerHTML = `<svg viewBox="0 0 24 24"><path d="${audio.paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zM13 5h4v14h-4z'}"/></svg>`;
+      mpPlay.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+    };
+    const syncBar = () => { const d = audio.duration; mpBar.style.width = Number.isFinite(d) && d > 0 ? `${Math.min(100, (audio.currentTime / d) * 100).toFixed(1)}%` : '0%'; };
+    const baseEmit = emit; // refresh whenever the song or play state changes
+    emit = function () { baseEmit(); syncMini(); syncBar(); };
+    setInterval(() => { if (!audio.paused) syncBar(); }, 500);
+    q('.mp-info').onclick = () => document.querySelectorAll('.pop.open').forEach((p) => p.classList.remove('open')); // back to the full player
+    q('.mp-prev').onclick = (e) => { e.stopPropagation(); prev(); };
+    q('.mp-next').onclick = (e) => { e.stopPropagation(); next(); };
+    mpPlay.onclick = (e) => { e.stopPropagation(); if (!cur) startPlayback(); else if (audio.paused) audio.play(); else audio.pause(); };
+    syncMini();
+  }
 
   /* ================= phone integration ================= */
   document.addEventListener('DOMContentLoaded', () => {}); // (scripts load at the end of <body>, so the DOM is already there)

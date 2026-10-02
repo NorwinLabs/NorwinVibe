@@ -237,7 +237,7 @@ bridge.onArt(onArt);
 /* ---------- controls ---------- */
 const send = (c) => bridge.cmd(c);
 el.play.onclick = () => {
-  if (!st.active) return;
+  if (!st.active) { if (bridge.idlePlay) bridge.idlePlay(); return; } // nothing loaded yet: the phone starts a song from the library / playlist
   st.pos = livePos(); recvAt = performance.now();
   st.playing = !st.playing; el.card.classList.toggle('playing', st.playing); // optimistic
   pendingPlay = { value: st.playing, until: performance.now() + 1500 };
