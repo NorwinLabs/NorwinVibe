@@ -366,9 +366,7 @@ html[data-needle="nightcity"] .arm-head { border-radius: 0; background: #ff2b4e;
    "soft": the old heavy blur. "off": colours only. Other themes hide the picture and keep their own look. */
 html[data-bgart="cover"] .bg { filter: blur(6px) saturate(1.2); transform: scale(1.1); }
 html[data-bgart="cover"] .bg.on { opacity: 1; }
-html[data-theme="art"][data-bgart="cover"] .bg-tint { background:
-  radial-gradient(120% 60% at 15% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
-  linear-gradient(180deg, rgba(10,10,16,calc(var(--veil-a, .45) * .28)) 0%, rgba(10,10,16,calc(var(--veil-a, .45) * .5)) 34%, rgba(10,10,16,calc(var(--veil-b, .82) * .93)) 100%); }
+html[data-theme="art"][data-bgart="cover"] .bg-tint { background: rgba(10,10,16,calc(var(--veil-a, .45) * 1.05)); }
 html[data-bgart="off"] .bg, html[data-bgart="off"] .wall { display: none; }
 .credit .ver:empty::before { display: none; }
 
