@@ -368,7 +368,7 @@
     try { const p = nativePayload(true); await bg.start(p); bgOn = true; if (p.art) artSentFor = keyOf(cur); } catch { bgOn = false; }
   }
   function pushNative(withArt) { if (bg && bgOn) { const p = nativePayload(withArt); bg.update(p).then(() => { if (p.art && cur) artSentFor = keyOf(cur); }).catch(() => {}); } }
-  function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; } }, 60000); }
+  function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; } }, 30 * 60 * 1000); } // stays in the notification shade (so a headset or the shade can resume) for half an hour paused
   let duckVol = 0;
 
   /* ---------- Android Auto / Assistant (Pro) ---------- */

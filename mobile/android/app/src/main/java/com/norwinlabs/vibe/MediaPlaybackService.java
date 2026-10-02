@@ -43,7 +43,19 @@ public class MediaPlaybackService extends Service {
     private static volatile boolean running = false;
     private static MediaSession session;
     private static Bitmap lastArt;
-    private PowerManager.WakeLock wakeLock;
+    private static PowerManager.WakeLock wakeLock;
+
+    /** Keeps the CPU awake so audio does not stutter with the screen off, but only while something is actually playing. */
+    private static synchronized void setWake(Context ctx, boolean on) {
+        if (on) {
+            if (wakeLock == null) {
+                PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NorwinVibe:playback");
+                wakeLock.setReferenceCounted(false);
+            }
+            if (!wakeLock.isHeld()) wakeLock.acquire(6 * 60 * 60 * 1000L);
+        } else if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+    }
 
     /** What the web UI tells us about the current song. */
     static final class Params {
@@ -87,6 +99,7 @@ public class MediaPlaybackService extends Service {
                 @Override public void onPlayFromMediaId(String mediaId, android.os.Bundle extras) { AutoBrowserService.handlePlay(mediaId); }
                 @Override public void onPlayFromSearch(String query, android.os.Bundle extras) { MediaServicePlugin.dispatchPlay(null, null, query == null ? "" : query); }
             });
+            session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
             session.setActive(true);
         }
         return session;
@@ -128,16 +141,13 @@ public class MediaPlaybackService extends Service {
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_TRANSPORT)
                 .setVisibility(Notification.VISIBILITY_PUBLIC);
-        if (p.pro) {
-            updateSession(ctx, p);
-            if (lastArt != null) b.setLargeIcon(lastArt);
-            b.addAction(act(ctx, android.R.drawable.ic_media_previous, "Previous", ACTION_PREV, 1));
-            b.addAction(act(ctx, p.playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, p.playing ? "Pause" : "Play", ACTION_TOGGLE, 2));
-            b.addAction(act(ctx, android.R.drawable.ic_media_next, "Next", ACTION_NEXT, 3));
-            b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2));
-        } else {
-            releaseSession();
-        }
+        // Bluetooth / headset buttons, the notification shade and the lock screen: for everyone
+        updateSession(ctx, p);
+        if (lastArt != null) b.setLargeIcon(lastArt);
+        b.addAction(act(ctx, android.R.drawable.ic_media_previous, "Previous", ACTION_PREV, 1));
+        b.addAction(act(ctx, p.playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, p.playing ? "Pause" : "Play", ACTION_TOGGLE, 2));
+        b.addAction(act(ctx, android.R.drawable.ic_media_next, "Next", ACTION_NEXT, 3));
+        b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2));
         return b.build();
     }
 
@@ -155,6 +165,7 @@ public class MediaPlaybackService extends Service {
     /** Refreshes the notification, session and widget (track change, play / pause, seek) without restarting the service. */
     static void update(Context ctx, Params p) {
         Notification n = apply(ctx, p);
+        if (running) setWake(ctx, p.playing);
         if (running) ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, n);
     }
 
@@ -223,12 +234,7 @@ public class MediaPlaybackService extends Service {
         else startForeground(NOTIFICATION_ID, n);
         running = true;
         if (p.playing) takeFocus();
-        if (wakeLock == null) { // keeps the CPU awake so audio does not stutter with the screen off
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NorwinVibe:playback");
-            wakeLock.setReferenceCounted(false);
-            wakeLock.acquire();
-        }
+        setWake(this, p.playing);
         return START_NOT_STICKY; // if the system kills it there is nothing worth restarting
     }
 
@@ -239,8 +245,7 @@ public class MediaPlaybackService extends Service {
         releaseSession();
         getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("playing", false).apply();
         NowPlayingWidget.refreshAll(this);
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-        wakeLock = null;
+        setWake(this, false);
         super.onDestroy();
     }
 
