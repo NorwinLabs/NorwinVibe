@@ -10,9 +10,9 @@ public class MediaActionReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null || intent.getAction() == null) return;
         switch (intent.getAction()) {
-            case MediaPlaybackService.ACTION_PREV: MediaServicePlugin.dispatch("prev", 0); break;
-            case MediaPlaybackService.ACTION_NEXT: MediaServicePlugin.dispatch("next", 0); break;
-            case MediaPlaybackService.ACTION_TOGGLE: MediaServicePlugin.dispatch("toggle", 0); break;
+            case MediaPlaybackService.ACTION_PREV: MediaPlaybackService.command("prev", 0); break;
+            case MediaPlaybackService.ACTION_NEXT: MediaPlaybackService.command("next", 0); break;
+            case MediaPlaybackService.ACTION_TOGGLE: MediaPlaybackService.command("toggle", 0); break;
             default: break;
         }
     }

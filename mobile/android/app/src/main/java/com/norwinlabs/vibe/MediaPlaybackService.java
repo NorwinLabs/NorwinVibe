@@ -24,8 +24,8 @@ import android.os.PowerManager;
 import android.util.Base64;
 
 /**
- * Foreground service (type: mediaPlayback) that keeps the app process, and the music playing in the WebView,
- * alive while the screen is off or the app is in the background.
+ * Foreground service (type: mediaPlayback) that keeps the app process, and the music (the native player, or the web
+ * player for songs it cannot play), alive while the screen is off, the app is in the background or it was swiped away.
  *
  * Everyone gets the "now playing" notification. With Pro it is a real media notification (artwork, previous /
  * play-pause / next, a seek bar on the lock screen) backed by a MediaSession, and the home-screen widget is enabled.
@@ -85,6 +85,35 @@ public class MediaPlaybackService extends Service {
     }
 
     static Context appContext() { return appCtx; }
+    static boolean isRunning() { return running; }
+
+    /** Buttons (notification, lock screen, headset, widget, focus changes): the native player handles them when it is playing, otherwise the web UI does. */
+    static void command(String a, long pos) {
+        if (NativePlayer.engaged()) NativePlayer.post(() -> {
+            switch (a) {
+                case "play": NativePlayer.play(); break;
+                case "pause": NativePlayer.pause(); break;
+                case "toggle": if (NativePlayer.isPlaying()) NativePlayer.pause(); else NativePlayer.play(); break;
+                case "next": NativePlayer.next(); break;
+                case "prev": NativePlayer.prev(); break;
+                case "seekTo": NativePlayer.seek(pos); break;
+                case "duck": NativePlayer.setDucked(true); break;
+                case "unduck": NativePlayer.setDucked(false); break;
+                default: break;
+            }
+        });
+        else MediaServicePlugin.dispatch(a, pos);
+    }
+
+    /** The native player found the cover in the file's tags. */
+    static void setArt(Context ctx, Bitmap bmp, Params p) {
+        lastArt = bmp;
+        update(ctx, p);
+    }
+
+    private static MediaPlaybackService inst;
+    /** The native player is about to make sound: take audio focus (and watch for headphones being unplugged). */
+    static void focus() { if (inst != null) inst.takeFocus(); }
 
     /** One MediaSession shared by the notification, lock screen, headsets and Android Auto. */
     static synchronized MediaSession ensureSession(Context ctx) {
@@ -92,11 +121,11 @@ public class MediaPlaybackService extends Service {
         if (session == null) {
             session = new MediaSession(appCtx, "NorwinVibe");
             session.setCallback(new MediaSession.Callback() {
-                @Override public void onPlay() { MediaServicePlugin.dispatch("play", 0); }
-                @Override public void onPause() { MediaServicePlugin.dispatch("pause", 0); }
-                @Override public void onSkipToNext() { MediaServicePlugin.dispatch("next", 0); }
-                @Override public void onSkipToPrevious() { MediaServicePlugin.dispatch("prev", 0); }
-                @Override public void onSeekTo(long pos) { MediaServicePlugin.dispatch("seekTo", pos); }
+                @Override public void onPlay() { command("play", 0); }
+                @Override public void onPause() { command("pause", 0); }
+                @Override public void onSkipToNext() { command("next", 0); }
+                @Override public void onSkipToPrevious() { command("prev", 0); }
+                @Override public void onSeekTo(long pos) { command("seekTo", pos); }
                 @Override public void onPlayFromMediaId(String mediaId, android.os.Bundle extras) { AutoBrowserService.handlePlay(mediaId); }
                 @Override public void onPlayFromSearch(String query, android.os.Bundle extras) { MediaServicePlugin.dispatchPlay(null, null, query == null ? "" : query); }
             });
@@ -185,20 +214,20 @@ public class MediaPlaybackService extends Service {
     private boolean pausedByFocus = false, ducked = false, focusHeld = false;
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
-            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) MediaServicePlugin.dispatch("pause", 0);
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) command("pause", 0);
         }
     };
     private final AudioManager.OnAudioFocusChangeListener focusListener = (change) -> {
         switch (change) {
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                pausedByFocus = true; MediaServicePlugin.dispatch("pause", 0); break;
+                pausedByFocus = true; command("pause", 0); break;
             case AudioManager.AUDIOFOCUS_LOSS:
-                pausedByFocus = false; MediaServicePlugin.dispatch("pause", 0); break;
+                pausedByFocus = false; command("pause", 0); break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                ducked = true; MediaServicePlugin.dispatch("duck", 0); break;
+                ducked = true; command("duck", 0); break;
             case AudioManager.AUDIOFOCUS_GAIN:
-                if (pausedByFocus) { pausedByFocus = false; MediaServicePlugin.dispatch("play", 0); }
-                if (ducked) { ducked = false; MediaServicePlugin.dispatch("unduck", 0); }
+                if (pausedByFocus) { pausedByFocus = false; command("play", 0); }
+                if (ducked) { ducked = false; command("unduck", 0); }
                 break;
             default: break;
         }
@@ -237,7 +266,7 @@ public class MediaPlaybackService extends Service {
         Notification n = apply(this, p);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTIFICATION_ID, n);
-        running = true;
+        running = true; inst = this;
         if (p.playing) takeFocus();
         setWake(this, p.playing);
         return START_NOT_STICKY; // if the system kills it there is nothing worth restarting
@@ -245,7 +274,8 @@ public class MediaPlaybackService extends Service {
 
     @Override
     public void onDestroy() {
-        running = false;
+        running = false; if (inst == this) inst = null;
+        NativePlayer.post(NativePlayer::shutdown);
         dropFocus();
         releaseSession();
         getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("playing", false).apply();

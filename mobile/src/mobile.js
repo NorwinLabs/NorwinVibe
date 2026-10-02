@@ -103,6 +103,17 @@
     const done = (d) => { URL.revokeObjectURL(url); res(Number.isFinite(d) ? d : 0); };
     a.preload = 'metadata'; a.onloadedmetadata = () => done(a.duration); a.onerror = () => done(0); setTimeout(() => done(0), 6000); a.src = url;
   });
+  async function storeNative(id, file) { // copy the song into the app's own storage in chunks
+    const CH = 768 * 1024; let path = '';
+    try {
+      for (let off = 0; off === 0 || off < file.size; off += CH) {
+        const buf = new Uint8Array(await file.slice(off, off + CH).arrayBuffer()); let bin = '';
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        path = (await bg.storeFile({ id, data: btoa(bin), append: off > 0 })).path;
+      }
+    } catch (e) { if (path) bg.deleteFile({ path }).catch(() => {}); throw e; }
+    return path;
+  }
   async function addFiles(files) {
     await libReady;
     let added = 0; const list = [...files];
@@ -120,7 +131,8 @@
         id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name: f.name, size: f.size, type: f.type,
         title, artist, album: (tags.album || '').trim(), dur: await readDuration(f), art: tags.picture ? await thumb(tags.picture) : '', added: Date.now(),
       };
-      await dbMulti(['meta', 'blobs'], (m, b) => { m.put(rec); b.put({ id: rec.id, blob: f }); });
+      if (nativeOK()) { try { rec.path = await storeNative(rec.id, f); rec.own = true; } catch { rec.path = ''; delete rec.own; } } // a file the native player can open
+      await dbMulti(['meta', 'blobs'], (m, b) => { m.put(rec); if (!rec.path) b.put({ id: rec.id, blob: f }); });
       lib.push(rec); added++;
     }
     sortLib(); toast(added ? `Added ${added} song${added === 1 ? '' : 's'}` : 'Those songs are already in your library');
@@ -148,7 +160,7 @@
         const fb = splitName(x.name || x.path.split('/').pop());
         return { id: 'p:' + x.path, path: x.path, name: x.name, size: x.size, type: '', title: known(x.title) || fb.title, artist: known(x.artist) || fb.artist, album: known(x.album), dur: x.dur || 0, art: '', added: Date.now() };
       });
-      const gone = lib.filter((t) => t.path && !paths.has(t.path)); // deleted from the phone since the last scan
+      const gone = lib.filter((t) => t.path && !t.own && !paths.has(t.path)); // deleted from the phone since the last scan
       if (fresh.length || gone.length) {
         await dbMulti(['meta', 'blobs'], (m, b) => { fresh.forEach((r) => m.put(r)); gone.forEach((r) => { m.delete(r.id); b.delete(r.id); }); });
         const goneIds = new Set(gone.map((t) => t.id));
@@ -169,6 +181,7 @@
   // the cover is read BEFORE the song is announced, so the picture never pops in after the title (that was the flicker)
   const artFirst = (t, blob) => Promise.race([lazyArt(t, blob), new Promise((r) => setTimeout(r, 1500))]);
   async function removeTrack(id) {
+    const gone = lib.find((t) => t.id === id); if (gone && gone.own && bg) bg.deleteFile({ path: gone.path }).catch(() => {});
     await dbMulti(['meta', 'blobs'], (m, b) => { m.delete(id); b.delete(id); });
     lib = lib.filter((t) => t.id !== id);
     playlists.forEach((p) => { p.ids = p.ids.filter((x) => x !== id); }); savePlaylists();
@@ -186,11 +199,42 @@
   let active = 0, audio = decks[0]; // `audio` is always the deck you are hearing / controlling
   const deckUrl = ['', ''];
   const useDeck = (i) => { active = i; audio = decks[i]; };
+  /* Phone songs play in the native player (NativePlayer.java), which lives in the background service, so music keeps going
+     after the app is swiped away. `nd` stands in for an audio element and mirrors it. Songs it cannot open (copies that
+     were added before this version) still play in the web decks above. */
+  let orderVer = 0, nativeVer = -1, nativeLive = false;
+  const nativeOK = () => !!(bg && cap && cap.isNativePlatform && cap.isNativePlatform());
+  const nd = (() => {
+    const L = {}; let pos = 0, at = 0, vol = 1, mu = false;
+    const sendVol = () => { if (bg && nativeLive) bg.setVolume({ volume: vol, muted: mu }).catch(() => {}); };
+    const o = {
+      isNative: true, paused: true, ended: false, duration: NaN, preload: '',
+      addEventListener(e, f) { (L[e] = L[e] || []).push(f); },
+      fire(e) { (L[e] || []).forEach((f) => f()); },
+      removeAttribute() {},
+      get volume() { return vol; }, set volume(v) { vol = v; sendVol(); },
+      get muted() { return mu; }, set muted(m) { mu = !!m; sendVol(); },
+      get currentTime() { return pos + (o.paused ? 0 : (performance.now() - at) / 1000); },
+      set currentTime(v) { pos = Math.max(0, Number(v) || 0); at = performance.now(); if (nativeLive) bg.seek({ ms: Math.round(pos * 1000) }).catch(() => {}); o.fire('seeked'); },
+      play() {
+        if (!nativeLive) { if (cur) loadNative(cur, true, Math.round(o.currentTime * 1000)); return Promise.resolve(); } // the service was stopped: start the song again from here
+        bg.play().catch(() => {}); o.setPlaying(true); return Promise.resolve();
+      },
+      pause() { if (nativeLive) bg.pause().catch(() => {}); o.setPlaying(false); },
+      setPlaying(p) { if (o.paused === !p) return; pos = o.currentTime; at = performance.now(); o.paused = !p; o.fire(p ? 'play' : 'pause'); },
+      sync(st) {
+        if (typeof st.pos === 'number') { pos = st.pos / 1000; at = performance.now(); }
+        if (st.dur > 0 && st.dur / 1000 !== o.duration) { o.duration = st.dur / 1000; o.fire('durationchange'); }
+        if ('playing' in st) o.setPlaying(!!st.playing);
+      },
+    };
+    return o;
+  })();
   let cur = null, order = [], idx = -1, shuffle = false, repeat = 'None', muted = false, xfading = false;
   let source = { type: 'library', id: null }; // what the queue was built from: the whole library or one playlist
   const cb = {}; // bridge callbacks registered by the shared UI
   const setDeckSrc = (i, blob) => { if (deckUrl[i]) URL.revokeObjectURL(deckUrl[i]); deckUrl[i] = URL.createObjectURL(blob); decks[i].src = deckUrl[i]; };
-  const setVol = (v) => decks.forEach((d) => { d.volume = v; });
+  const setVol = (v) => [...decks, nd].forEach((d) => { d.volume = v; });
   const shuffled = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   /* smart shuffle (Pro): weighted random that favours songs you have not heard (or have starred) and avoids ones you just
@@ -222,7 +266,7 @@
       if (entitled.has('pro') && prefs.smartshuffle && ids.length > 1) ids = smartOrder(ids, startId);
       else { shuffled(ids); if (startId) { const i = ids.indexOf(startId); if (i > 0) { ids.splice(i, 1); ids.unshift(startId); } } }
     }
-    order = ids; idx = startId ? order.indexOf(startId) : -1;
+    order = ids; orderVer++; idx = startId ? order.indexOf(startId) : -1; syncQueue();
   }
   const keyOf = (t) => `${t.title}|${t.artist}|${t.album}|Library`;
 
@@ -244,11 +288,40 @@
       applyEq(); return true;
     } catch { ctx = null; return false; }
   }
-  function applyEq() { if (ctx) filters.forEach((f, i) => { f.gain.value = entitled.has('pro') && fx.eq ? fx.gains[i] : 0; }); }
+  function applyEq() { pushFx(); if (ctx) filters.forEach((f, i) => { f.gain.value = entitled.has('pro') && fx.eq ? fx.gains[i] : 0; }); }
   const resumeCtx = () => (ctx && ctx.state === 'suspended' ? ctx.resume().catch(() => {}) : Promise.resolve());
 
+  const fxPayload = () => ({ pro: entitled.has('pro'), eq: !!fx.eq, gains: fx.gains, xfade: fx.xfade });
+  const pushFx = () => { if (nativeLive) bg.setFx(fxPayload()).catch(() => {}); };
+  async function sendQueue(i, autoplay, pos) { // hand the native player the play order (once per order) and start song `i`
+    if (nativeLive && nativeVer === orderVer) { await bg.playIndex({ index: i, autoplay, position: pos, ...fxPayload() }); return; }
+    await bg.setQueue({ items: queueItems(), index: i, autoplay, position: pos, repeat, volume: nd.volume, muted: nd.muted, ...fxPayload() });
+    nativeVer = orderVer; nativeLive = true;
+  }
+  const queueItems = () => order.map((x) => { const q = lib.find((y) => y.id === x) || {}; return { id: x, path: q.path || '', title: q.title || '', artist: q.artist || '', album: q.album || '', dur: q.dur || 0 }; });
+  function syncQueue() { // the play order changed (shuffle, library edit) while the native player is playing: give it the new order without interrupting the song
+    if (!(audio === nd && nativeLive) || !cur) return;
+    const i = order.indexOf(cur.id); if (i < 0) return;
+    const v = orderVer; bg.setQueue({ items: queueItems(), index: i, keep: true }).then(() => { nativeVer = v; }).catch(() => {});
+  }
+  async function loadNative(t, autoplay, pos) {
+    xfading = false; decks.forEach((d) => d.pause());
+    if (!t.art && !t.artTried) { try { await artFirst(t, await getBlob(t)); } catch { toast('That file is missing'); return; } } // the cover shown in the app (the notification gets its own)
+    if (!order.includes(t.id)) buildOrder(t.id);
+    cur = t; idx = order.indexOf(t.id); useNative(); rememberLast(); emitArt();
+    try { if (!bgOn) await startBackground(); await sendQueue(idx, autoplay, pos || 0); } catch { toast('Could not start the music player'); return; }
+    emit();
+  }
+  const useNative = () => { audio = nd; };
+  function nativeTrack(id) { // the native player moved on by itself (next song, notification button, ...)
+    const t = lib.find((x) => x.id === id); if (!t || (cur && cur.id === id && audio === nd)) return;
+    cur = t; idx = order.indexOf(id); useNative(); rememberLast(); emitArt(); emit();
+    getBlob(t).then((b) => lazyArt(t, b)).catch(() => {}); // late cover is emitted by lazyArt
+  }
   async function loadTrack(id, autoplay) {
     const t = lib.find((x) => x.id === id); if (!t) return;
+    if (nativeOK() && t.path) return loadNative(t, autoplay, 0);
+    if (audio === nd) { if (nativeLive) bg.release().catch(() => {}); nativeLive = false; nd.setPlaying(false); useDeck(active); } // a song only the web player can open
     let blob; try { blob = await getBlob(t); } catch { toast('That file is missing'); return; }
     xfading = false;
     decks.forEach((d, i) => { if (i !== active) d.pause(); });
@@ -275,12 +348,14 @@
   const peekNext = () => { if (!order.length || repeat === 'Track') return null; let i = idx + 1; if (i >= order.length) { if (repeat === 'List') i = 0; else return null; } return order[i]; };
   function next() {
     if (!order.length) return;
+    if (audio === nd && nativeLive) { bg.next().catch(() => {}); return; }
     let i = idx + 1;
     if (i >= order.length) { if (repeat === 'List') i = 0; else { audio.pause(); audio.currentTime = 0; emit(); return; } }
     playId(order[i], true);
   }
   function prev() {
     if (!order.length) return;
+    if (audio === nd && nativeLive) { bg.prev().catch(() => {}); return; }
     if (audio.currentTime > 3) { audio.currentTime = 0; return; }
     let i = idx - 1; if (i < 0) i = repeat === 'List' ? order.length - 1 : 0;
     playId(order[i], true);
@@ -306,7 +381,7 @@
       setTimeout(() => { decks[oldDeck].pause(); xfading = false; }, secs * 1000 + 150);
     } catch { xfading = false; }
   }
-  decks.forEach((d) => {
+  [...decks, nd].forEach((d) => {
     d.addEventListener('ended', () => { if (d !== audio) return; if (repeat === 'Track') { audio.currentTime = 0; audio.play(); } else next(); });
     ['play', 'pause', 'loadedmetadata', 'seeked', 'durationchange'].forEach((e) => d.addEventListener(e, () => { if (d !== audio) return; emit(); if (e === 'pause') { stopBackgroundSoon(); pushNative(); } else if (e === 'play') { startBackground(); pushNative(); } else if (e === 'seeked') pushNative(); }));
     d.addEventListener('timeupdate', () => { // time to start fading into the next song?
@@ -368,9 +443,32 @@
     if (bgOn) return pushNative();
     try { const p = nativePayload(true); await bg.start(p); bgOn = true; if (p.art) artSentFor = keyOf(cur); } catch { bgOn = false; }
   }
-  function pushNative(withArt) { if (bg && bgOn) { const p = nativePayload(withArt); bg.update(p).then(() => { if (p.art && cur) artSentFor = keyOf(cur); }).catch(() => {}); } }
-  function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; } }, 30 * 60 * 1000); } // stays in the notification shade (so a headset or the shade can resume) for half an hour paused
+  function pushNative(withArt) { if (bg && bgOn && audio !== nd) { const p = nativePayload(withArt); bg.update(p).then(() => { if (p.art && cur) artSentFor = keyOf(cur); }).catch(() => {}); } }
+  function stopBackgroundSoon() { clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (audio.paused && bg && bgOn) { bg.stop().catch(() => {}); bgOn = false; nativeLive = false; } }, 30 * 60 * 1000); } // stays in the notification shade (so a headset or the shade can resume) for half an hour paused
   let duckVol = 0;
+
+  if (bg && bg.addListener) bg.addListener('native', (e) => { // what the native player is doing
+    if (!e) return;
+    if (e.type === 'state') { if (e.id && cur && e.id !== cur.id && audio === nd) nativeTrack(e.id); if (audio === nd) nd.sync(e); }
+    else if (e.type === 'track') nativeTrack(e.id);
+    else if (e.type === 'needjs') { if (e.id) { audio = nd; nd.setPlaying(false); const i = order.indexOf(e.id); if (i >= 0) { idx = i; playId(e.id, true); } } } // next song is one only the web player can open
+    else if (e.type === 'error') toast('Could not play that file');
+  });
+  async function restoreNative() { // the app was swiped away while music played: pick the native player up where it is
+    if (!nativeOK() || !bg.getState) return false;
+    try {
+      const st = await bg.getState(); if (!st || !st.active || !st.ids || !st.ids.length) return false;
+      const curId = st.ids[st.index], now = lib.find((t) => t.id === curId);
+      if (!now) { bg.release().catch(() => {}); return false; } // that song is gone from the library
+      const ids = st.ids.filter((x) => lib.some((t) => t.id === x));
+      const last = LS.get('vibe.last', null); if (last && last.src) source = last.src;
+      order = ids; orderVer++; nativeVer = ids.length === st.ids.length ? orderVer : -1; nativeLive = true; bgOn = true; repeat = st.repeat || 'None';
+      cur = now; idx = ids.indexOf(curId); useNative();
+      nd.sync({ pos: st.pos, dur: st.dur, playing: st.playing });
+      emitArt(); emit(); updateUpNext(); getBlob(cur).then((b) => lazyArt(cur, b)).catch(() => {});
+      return true;
+    } catch { return false; }
+  }
 
   /* ---------- Android Auto / Assistant (Pro) ---------- */
   function autoPlay(id, listId) { // a song picked in the car's browse tree
@@ -495,10 +593,10 @@
       else if (k === 'next') next(); else if (k === 'prev') prev();
       else if (k === 'seek') { audio.currentTime = parseFloat(v) || 0; emit(); }
       else if (k === 'shuffle') { shuffle = v === '1'; buildOrder(cur && cur.id); emit(); }
-      else if (k === 'repeat') { repeat = v; emit(); }
+      else if (k === 'repeat') { repeat = v; if (nativeLive) bg.setRepeat({ mode: v }).catch(() => {}); emit(); }
       else if (k === 'volume') { setVol(Math.min(1, Math.max(0, parseFloat(v)))); emit(); }
       else if (k === 'volstep') { setVol(Math.min(1, Math.max(0, audio.volume + parseFloat(v)))); emit(); }
-      else if (k === 'mute') { muted = v === '1'; decks.forEach((d) => { d.muted = muted; }); emit(); }
+      else if (k === 'mute') { muted = v === '1'; [...decks, nd].forEach((d) => { d.muted = muted; }); emit(); }
     },
     onUpdate: (f) => { cb.update = f; }, updateState: async () => upd, updateCheck: () => updateCheck(true), updateInstall: () => updateInstall(),
     prefs: async () => { const { devAsFree, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: window.APP_VERSION || '' }; },
@@ -696,7 +794,7 @@
   let searchTimer = 0; searchEl.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLibrary, 160); }; // wait for a pause in typing
   $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
   $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
-  libReady.then(() => { buildOrder(); renderLibrary(); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
+  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */
