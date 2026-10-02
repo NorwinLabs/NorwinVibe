@@ -270,7 +270,8 @@ function measureArm() {
   if (!w.width) return;
   const s = w.width / 236, cx = w.left + w.width / 2, cy = w.top + w.height / 2, px = b.left + b.width / 2, py = b.top + b.height / 2;
   // calibrate the stylus offset from the real element: undo the arm's current rotation
-  const vx = (tp.left - px) / s, vy = (tp.top - py) / s, ca = Math.cos(-armAngle * Math.PI / 180), sa = Math.sin(-armAngle * Math.PI / 180);
+  const eff = armAngle + liftPos * 1.6, sc = 1 + liftPos * 0.035; // the lift adds a little rotation and scale; undo both too
+  const vx = (tp.left - px) / s / sc, vy = (tp.top - py) / s / sc, ca = Math.cos(-eff * Math.PI / 180), sa = Math.sin(-eff * Math.PI / 180);
   armTip = [vx * ca - vy * sa, vx * sa + vy * ca];
   const radiusAt = (deg) => { const a = deg * Math.PI / 180, c = Math.cos(a), n = Math.sin(a);
     return Math.hypot(px + (armTip[0] * c - armTip[1] * n) * s - cx, py + (armTip[0] * n + armTip[1] * c) * s - cy) / s; };
@@ -280,13 +281,25 @@ function measureArm() {
   const solve = (r) => { let last = -10; for (let d = -10; d <= 80; d += 0.05) { if (radiusAt(d) <= r || tipY(d) < cy) return d; last = d; } return last; };
   armRange = { out: solve(R_OUT), inn: solve(R_IN) }; armRangeAt = performance.now();
 }
-const applyArm = () => { armEl.style.transform = `rotate(${armAngle.toFixed(3)}deg)`; };
+/* Lifting and lowering the stylus: `liftPos` is 0 with the needle in the groove and 1 raised. A small spring moves it, so putting
+   it down settles with a tiny bounce and picking it up eases away. Raised = a touch nearer the viewer (bigger, longer shadow). */
+let liftPos = 1, liftVel = 0;
+function stepLift(dt, playing) {
+  const target = playing || needleDrag ? 0 : 1, lowering = target === 0;
+  const k = lowering ? 90 : 38, c = lowering ? 8.5 : 9.5; // lowering is crisper and bounces slightly; raising is slower and smooth
+  liftVel += ((target - liftPos) * k - liftVel * c) * dt; liftPos += liftVel * dt;
+  if (Math.abs(target - liftPos) < 0.0005 && Math.abs(liftVel) < 0.005) { liftPos = target; liftVel = 0; }
+}
+const applyArm = () => {
+  armEl.style.transform = `rotate(${(armAngle + liftPos * 1.6).toFixed(3)}deg) scale(${(1 + liftPos * 0.035).toFixed(4)})`;
+  armEl.style.setProperty('--lift', liftPos.toFixed(3));
+};
 function updateArm(t, pos) {
   const dt = Math.max(0, Math.min(0.1, (t - (armLast || t)) / 1000)); armLast = t; // never negative or huge (clock jumps, tab resume)
   if (!Number.isFinite(armAngle)) armAngle = REST_DEG;
   if (!armRange || performance.now() - armRangeAt > 400) measureArm();
   const playing = el.card.classList.contains('playing');
-  armEl.classList.toggle('lifted', !playing);
+  stepLift(dt, playing);
   if (needleDrag) { applyArm(); return; } // the pointer sets the angle while dragging
   let target = REST_DEG;
   if (armRange && st.active) {

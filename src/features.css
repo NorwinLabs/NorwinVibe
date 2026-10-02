@@ -247,8 +247,8 @@ html[data-record="cyber"] .sheen { opacity: .35; }
 .key-row .act { flex: none; }
 
 /* needle: angle is set from JS every frame (locked to song time), so no CSS transform transition */
-.arm { transition: filter .5s !important; }
-.arm.lifted { filter: drop-shadow(0 14px 8px rgba(0,0,0,.28)) brightness(1.07); } /* paused: raised, but resting where the song is */
+.arm { transition: none !important; }
+.arm { filter: drop-shadow(0 calc(6px + var(--lift, 0) * 8px) calc(6px + var(--lift, 0) * 3px) rgba(0,0,0,calc(.45 - var(--lift, 0) * .17))) brightness(calc(1 + var(--lift, 0) * .07)); } /* the shadow lengthens as the needle rises */
 .arm-tip { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; pointer-events: none; }
 
 
