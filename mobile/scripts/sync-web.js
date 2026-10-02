@@ -23,7 +23,8 @@ const pem = fs.readFileSync(path.join(repo, 'licensing', 'public.pem'), 'utf8').
 const keyHex = Buffer.from(pem, 'base64').subarray(-32).toString('hex');
 const storeCfg = JSON.parse(fs.readFileSync(path.join(repo, 'store.config.json'), 'utf8'));
 const verProps = fs.readFileSync(path.join(mobile, 'version.properties'), 'utf8');
-const appVersion = ((verProps.match(/^VERSION_NAME=(.*)$/m) || [])[1] || '').trim();
+const verProp = (k) => ((verProps.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1] || '').trim();
+const appVersion = `${verProp('VERSION_NAME')}.${verProp('VERSION_CODE')}`; // <major.minor>.<build>, the same as the APK's versionName
 fs.writeFileSync(path.join(www, 'config.js'), `window.APP_VERSION=${JSON.stringify(appVersion)};\nwindow.LICENSE_PUBKEY_HEX=${JSON.stringify(keyHex)};\nwindow.STORE_CONFIG=${JSON.stringify(storeCfg)};\n`);
 
 // 5. index.html: the desktop page with the phone's extras injected. Every replace is asserted, so if the
@@ -57,6 +58,16 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
     <h4>Crossfade</h4>
     <div class="vol-row"><input type="range" id="xf" min="0" max="12" step="1" value="0"><span id="xf-n">Off</span></div>
     <p class="hint">Blends the end of a song into the next one. Songs shorter than about 2.5 times the fade are left alone.</p>
+  </div>
+
+  <!-- theme store -->`);
+sub('  <!-- theme store -->', `  <!-- mini player: sits at the bottom while a panel (library, history, settings) is open -->
+  <div id="mini-player" aria-label="Now playing">
+    <div class="mp-info" role="button" aria-label="Open the player"><div class="mp-art"></div><div class="mp-tx"><b class="mp-title"></b><span class="mp-artist"></span></div></div>
+    <button class="mp-btn mp-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6v12M19 6l-9 6 9 6z"/></svg></button>
+    <button class="mp-btn mp-play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="mp-btn mp-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M18 6v12M5 6l9 6-9 6z"/></svg></button>
+    <div class="mp-bar"><i></i></div>
   </div>
 
   <!-- theme store -->`);

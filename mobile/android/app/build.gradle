@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 
 // Version numbers live in mobile/version.properties. The release workflow bumps VERSION_CODE and commits it back,
 // the same way NorwinLabsTools does, so every published build gets a higher number than the last.
+// VERSION_NAME is just major.minor; the app's version is <major.minor>.<build>, like Windows' <major.minor>.<run number>.
 def versionProps = new Properties()
 file('../../version.properties').withInputStream { versionProps.load(it) }
 
@@ -19,7 +20,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode versionProps.getProperty("VERSION_CODE").trim().toInteger()
-        versionName versionProps.getProperty("VERSION_NAME").trim()
+        versionName versionProps.getProperty("VERSION_NAME").trim() + "." + versionProps.getProperty("VERSION_CODE").trim()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
