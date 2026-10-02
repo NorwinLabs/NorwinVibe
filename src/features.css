@@ -107,18 +107,29 @@ body.fullscreen { padding: 0; }
 .fullscreen .stage { grid-area: stage; transform: scale(var(--amb, 1.8)); transform-origin: center; }
 .fullscreen .vinyl-wrap { transform: none; }
 .fullscreen .meta { grid-area: meta; text-align: left; padding: 0 0 0 8px; }
-.fullscreen .title { font-size: 34px; -webkit-mask: none; mask: none; } .fullscreen .title span { padding: 0; }
-.fullscreen .artist { font-size: 18px; }
+.fullscreen .title { font-size: calc(34px * var(--ui, 1)); -webkit-mask: none; mask: none; } .fullscreen .title span { padding: 0; }
+.fullscreen .artist { font-size: calc(18px * var(--ui, 1)); }
 .fullscreen .lyric { display: none; }
 .fullscreen .lyrics { grid-area: lyrics; display: block; position: relative; overflow: hidden; padding: 0 8px;
   -webkit-mask: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent); mask: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent); }
-.ln { padding: 8px 0; font-size: 30px; line-height: 1.25; font-weight: 700; letter-spacing: -.01em; opacity: .28; transform-origin: left center; transition: opacity .4s, transform .5s var(--ease), color .4s; }
+.ln { padding: calc(8px * var(--ui, 1)) 0; font-size: calc(30px * var(--ui, 1)); line-height: 1.25; font-weight: 700; letter-spacing: -.01em; opacity: .28; transform-origin: left center; transition: opacity .4s, transform .5s var(--ease), color .4s; }
 .ln.on { opacity: 1; transform: scale(1.05); color: #fff; }
-.ln.plain { font-size: 20px; opacity: .8; font-weight: 600; }
+.ln.plain { font-size: calc(20px * var(--ui, 1)); opacity: .8; font-weight: 600; }
 .lyrics .none { margin-top: 40%; text-align: center; font-size: 18px; color: var(--muted); }
-.fullscreen .progress { max-width: 900px; width: 100%; margin: 14px auto 0; }
+.fullscreen .progress { max-width: calc(900px * var(--ui, 1)); font-size: calc(11px * var(--ui, 1)); width: 100%; margin: 14px auto 0; }
 .fullscreen .controls { margin-top: 10px; }
 .fullscreen .card > .pop { top: 64px; right: 40px; }
+/* controls and header grow with the screen too */
+.fullscreen .ctl { width: calc(46px * var(--ui, 1)); height: calc(46px * var(--ui, 1)); } .fullscreen .ctl svg { width: calc(24px * var(--ui, 1)); height: calc(24px * var(--ui, 1)); }
+.fullscreen .ctl.play { width: calc(62px * var(--ui, 1)); height: calc(62px * var(--ui, 1)); } .fullscreen .ctl.play svg { width: calc(28px * var(--ui, 1)); height: calc(28px * var(--ui, 1)); }
+.fullscreen .controls { gap: calc(6px * var(--ui, 1)); }
+.fullscreen .top .wbtn { width: calc(30px * var(--ui, 1)); height: calc(30px * var(--ui, 1)); } .fullscreen .top .wbtn svg { width: calc(15px * var(--ui, 1)); height: calc(15px * var(--ui, 1)); }
+.fullscreen .card { padding: calc(28px * var(--ui, 1)) calc(56px * var(--ui, 1)) calc(36px * var(--ui, 1)); column-gap: calc(40px * var(--ui, 1)); }
+.fullscreen .volline { max-width: calc(260px * var(--ui, 1)); margin-top: calc(4px * var(--ui, 1)); }
+.fullscreen .volline .wbtn { width: calc(26px * var(--ui, 1)); height: calc(26px * var(--ui, 1)); } .fullscreen .volline .wbtn svg { width: calc(14px * var(--ui, 1)); height: calc(14px * var(--ui, 1)); }
+.fullscreen .volline .vol-row span { width: calc(24px * var(--ui, 1)); font-size: calc(11px * var(--ui, 1)); }
+.fullscreen.ultrawide .card { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+.ambient .card, .ambient.ultrawide .card { grid-template-columns: minmax(0, 1fr); }
 .fullscreen .hud { top: 80px; }
 .fullscreen #btn-mini { display: none; }
 .fullscreen .stage { width: 296px; height: 236px; margin: auto; }
@@ -144,12 +155,12 @@ body.fullscreen { padding: 0; }
 .ambient .bg { opacity: .55; animation: pan 60s ease-in-out infinite alternate; }
 @keyframes pan { from { transform: scale(1.25) translate(-3%, -2%); } to { transform: scale(1.55) translate(3%, 2%); } }
 
-.ambient .card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "stage" "meta" "progress" "controls"; padding: 24px 48px 28px; }
+.ambient .card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "stage" "meta" "progress" "controls"; padding: calc(24px * var(--ui, 1)) calc(48px * var(--ui, 1)) calc(28px * var(--ui, 1)); }
 .ambient .lyrics { display: none; }
 .ambient .meta { text-align: center; padding: 0; }
-.ambient .title { font-size: 44px; text-shadow: 0 2px 24px rgba(0,0,0,.35); }
-.ambient .artist { font-size: 20px; }
-.ambient .lyric { display: block; margin: 18px auto 0; max-width: 1100px; min-height: 52px; font-size: 30px; font-style: normal; font-weight: 600; line-height: 1.25;
+.ambient .title { font-size: calc(44px * var(--ui, 1)); text-shadow: 0 2px 24px rgba(0,0,0,.35); }
+.ambient .artist { font-size: calc(20px * var(--ui, 1)); }
+.ambient .lyric { display: block; margin: 18px auto 0; max-width: calc(1100px * var(--ui, 1)); min-height: calc(52px * var(--ui, 1)); font-size: calc(30px * var(--ui, 1)); font-style: normal; font-weight: 600; line-height: 1.25;
   color: #fff; white-space: normal; text-wrap: balance; text-shadow: 0 2px 28px rgba(0,0,0,.45); }
 .ambient .glow { inset: -10px; filter: blur(60px); }
 .ambient .top, .ambient .controls, .ambient .progress .time { transition: opacity .7s; }
@@ -341,7 +352,8 @@ html[data-needle="nightcity"] .arm-head { border-radius: 0; background: #ff2b4e;
 /* ---------- credit + version, bottom right ---------- */
 .credit { position: absolute; right: 12px; bottom: 5px; z-index: 3; display: flex; align-items: baseline; gap: 5px; max-width: calc(100% - 24px);
   font-size: 9.5px; letter-spacing: .02em; color: rgba(255,255,255,.4); pointer-events: none; white-space: nowrap; }
-.credit .ver { pointer-events: none; font: inherit; color: inherit; padding: 0; cursor: default; font-variant-numeric: tabular-nums; }
+.credit .ver { pointer-events: auto; font: inherit; color: inherit; padding: 0; cursor: pointer; -webkit-app-region: no-drag; font-variant-numeric: tabular-nums; }
+.credit .ver:hover { color: rgba(255,255,255,.75); }
 .credit .ver::before { content: "\00b7"; margin-right: 5px; }
 .credit.update .ver { pointer-events: auto; cursor: pointer; color: var(--accent); font-weight: 700; -webkit-app-region: no-drag; text-decoration: underline; text-underline-offset: 2px; }
 .credit.update { color: rgba(255,255,255,.6); }
@@ -422,3 +434,7 @@ body:not(.mobile) .mob-only { display: none !important; }
 .sp.show { display: block; }
 .sp .act-row.first { margin-top: 0; }
 .sp-tabs button { font-weight: 600; }
+
+.fullscreen .top::after, .mobile .top::after { display: none; }
+.mobile .top { margin: 0; padding: 0; }
+.fullscreen .top { margin: 0; padding: 0; }

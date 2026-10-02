@@ -423,9 +423,13 @@ let idleTimer = 0;
 function fitStage() {
   if (mode === 'none') return;
   const c = el.card, used = ['.top', '.meta', '.progress', '.controls'].reduce((n, q) => n + c.querySelector(q).offsetHeight, 0);
-  const h = c.clientHeight - used - 64 - 40;
-  const w = mode === 'ambient' ? c.clientWidth - 112 : (c.clientWidth - 112 - 40) / 2.15;
-  root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 3 : 2.4, h / 250, w / 310)).toFixed(2));
+  // Everything on screen grows with the display: ui is 1 on a small screen and up to 2.6 on a big or ultra-wide one.
+  const W = c.clientWidth, H = c.clientHeight, wide = W / H > 2.1; // 21:9 / 32:9 monitors get a wider lyrics column
+  const ui = Math.max(1, Math.min(2.6, Math.min(W / 1100, H / 680)));
+  root.style.setProperty('--ui', ui.toFixed(2)); document.body.classList.toggle('ultrawide', wide);
+  const h = H - used - (64 + 40) * ui;
+  const w = mode === 'ambient' ? W - 112 * ui : (W - (112 + 40) * ui) / (wide ? 2.6 : 2.15);
+  root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
   fitTitle();
 }
 function bumpIdle() { // ambient hides its UI (and the cursor) after a few idle seconds
@@ -443,7 +447,7 @@ function setMode(next) {
   $('hdr-full').classList.toggle('active', next === 'full');
   $('hdr-ambient').classList.toggle('active', next === 'ambient');
   document.body.classList.remove('idle-ui'); clearTimeout(idleTimer);
-  if (next === 'none') { bridge.fullscreen(false); root.style.removeProperty('--amb'); }
+  if (next === 'none') { bridge.fullscreen(false); root.style.removeProperty('--amb'); root.style.removeProperty('--ui'); document.body.classList.remove('ultrawide'); }
   else { if (wasNone) bridge.fullscreen(true); setTimeout(fitStage, 150); setTimeout(fitStage, 500); bumpIdle(); }
   lyr.idx = -2; // force a refresh of the active lyric line
 }
@@ -471,14 +475,28 @@ function showVersion(u) {
   let msg = '';
   if (u && u.state === 'downloading') { verEl.textContent = `${v} \u00b7 updating ${u.percent || 0}%`; msg = `Downloading ${u.version ? 'v' + u.version : 'an update'}\u2026 ${u.percent || 0}%`; }
   else if (u && u.state === 'ready') { creditEl.classList.add('update'); verEl.textContent = `${window.UPDATE_VERB || 'Restart to update'} to v${u.version}`; verEl.title = window.UPDATE_TITLE || 'Install the update and relaunch'; msg = `v${u.version} is ready. ${window.UPDATE_HOWTO || 'Click the version at the bottom to restart.'}`; }
-  else { verEl.textContent = v; verEl.title = 'Version'; msg = u && u.state === 'none' ? 'You are on the latest version.' : u && u.state === 'checking' ? 'Checking for updates\u2026' : u && u.state === 'error' ? 'Could not check for updates. Will try again later.' : u && u.state === 'unsupported' ? 'Updates are checked in the installed app.' : ''; }
+  else { verEl.textContent = v; verEl.title = 'Click to check for updates'; msg = u && u.state === 'none' ? 'You are on the latest version.' : u && u.state === 'checking' ? 'Checking for updates\u2026' : u && u.state === 'error' ? 'Could not check for updates. Will try again later.' : u && u.state === 'unsupported' ? 'Updates are checked in the installed app.' : ''; }
   const m = $('update-msg'); if (m) m.textContent = msg;
 }
 prefsReady.then((p) => { appVersion = p.version || window.APP_VERSION || ''; showVersion(null); });
 if (bridge.onUpdate) {
   bridge.onUpdate(showVersion);
   bridge.updateState().then((u) => { if (u && u.state !== 'idle') showVersion(u); });
-  verEl.onclick = () => { if (creditEl.classList.contains('update')) bridge.updateInstall(); else if (window.UPDATE_VERB) bridge.updateCheck().then(showVersion); }; // on the phone, tapping the version also checks
+  // click the version: install a downloaded update, otherwise check for one right now and say what happened
+  let verTimer = 0;
+  const verNote = (t) => { verEl.textContent = t; clearTimeout(verTimer); verTimer = setTimeout(() => showVersion(null), 4000); };
+  verEl.onclick = () => {
+    if (creditEl.classList.contains('update')) { bridge.updateInstall(); return; }
+    verNote('Checking…');
+    bridge.updateCheck().then((u) => {
+      if (u && u.state === 'unsupported') verNote('Updates: installed app only');
+      else if (u && (u.state === 'downloading' || u.state === 'ready')) showVersion(u);
+    });
+  };
+  bridge.onUpdate((u) => {
+    if (!u || creditEl.classList.contains('update') || u.state === 'downloading' || u.state === 'ready') return;
+    if (u.state === 'none') verNote('Up to date ✓'); else if (u.state === 'error') verNote('Update check failed');
+  });
   const updBtn = $('btn-update');
   const label = { checking: 'Checking…', none: 'Up to date ✓', downloading: 'Downloading…', ready: 'Update ready', error: 'Check failed', unsupported: 'Installed app only' };
   let labelTimer = 0;

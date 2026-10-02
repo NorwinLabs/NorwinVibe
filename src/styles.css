@@ -40,7 +40,11 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
     linear-gradient(180deg, rgba(10,10,16,var(--veil-a, .45)), rgba(10,10,16,var(--veil-b, .82))); }
 
 /* ---------- header ---------- */
-.top { display: flex; align-items: center; justify-content: space-between; height: 28px; }
+.top { position: relative; display: flex; align-items: center; justify-content: space-between; height: 34px; margin: -2px -20px 0; padding: 4px 20px 0; -webkit-app-region: drag; cursor: move; }
+/* a little grip in the middle shows the whole top strip is a handle for moving the window */
+.top::after { content: ""; position: absolute; left: 50%; top: 5px; width: 34px; height: 4px; margin-left: -17px; border-radius: 2px; background: rgba(255,255,255,.2); transition: background .2s, width .2s, margin-left .2s; pointer-events: none; }
+.top:hover::after { background: rgba(255,255,255,.45); width: 46px; margin-left: -23px; }
+.mini .top::after { display: none; }
 .source { position: relative; display: flex; cursor: default; -webkit-app-region: no-drag; padding: 4px 8px 4px 2px; border-radius: 9px; transition: background .2s; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .eq { display: inline-flex; align-items: flex-end; gap: 2px; width: 14px; height: 12px; }
 .eq i { flex: 1; height: 3px; background: var(--accent); border-radius: 2px; }
