@@ -498,6 +498,7 @@ let appVersion = '';
 const creditEl = $('credit'), verEl = $('credit-ver');
 function showVersion(u) {
   const v = appVersion ? `v${appVersion}` : '';
+  const av = $('about-ver'); if (av) av.textContent = v;
   creditEl.classList.remove('update'); verEl.disabled = false;
   let msg = '';
   if (u && u.state === 'downloading') { verEl.textContent = `${v} \u00b7 updating ${u.percent || 0}%`; msg = `Downloading ${u.version ? 'v' + u.version : 'an update'}\u2026 ${u.percent || 0}%`; }

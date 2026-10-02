@@ -348,7 +348,6 @@ html[data-needle="nightcity"] .arm-head { border-radius: 0; background: #ff2b4e;
   font-size: 9.5px; letter-spacing: .02em; color: rgba(255,255,255,.4); pointer-events: none; white-space: nowrap; }
 .credit .ver { pointer-events: auto; font: inherit; color: inherit; padding: 0; cursor: pointer; -webkit-app-region: no-drag; font-variant-numeric: tabular-nums; }
 .credit .ver:hover { color: rgba(255,255,255,.75); }
-.credit .ver::before { content: "\00b7"; margin-right: 5px; }
 .credit.update .ver { pointer-events: auto; cursor: pointer; color: var(--accent); font-weight: 700; -webkit-app-region: no-drag; text-decoration: underline; text-underline-offset: 2px; }
 .credit.update { color: rgba(255,255,255,.6); }
 .mini .credit { display: none; }
@@ -466,3 +465,8 @@ body.ghost .card { opacity: .62; }
 .mini .volpop .vol-row span { display: none; }
 .fullscreen .volpop { width: calc(240px * var(--ui, 1)); bottom: calc(100% + 12px * var(--ui, 1)); }
 .fullscreen .volpop .wbtn { width: calc(26px * var(--ui, 1)); height: calc(26px * var(--ui, 1)); } .fullscreen .volpop .vol-row span { font-size: calc(11px * var(--ui, 1)); width: calc(24px * var(--ui, 1)); }
+
+.about-id { display: grid; gap: 1px; margin-bottom: 4px; text-align: left; }
+.about-id b { font-size: 16px; letter-spacing: -.01em; }
+.about-id span { font-size: 12px; color: var(--muted); }
+.about-id small { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }
