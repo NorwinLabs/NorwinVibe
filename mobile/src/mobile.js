@@ -420,9 +420,9 @@
       const r = await fetch(RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } }); if (!r.ok) throw new Error('feed');
       const rel = await r.json();
       let best = null; // the newest release file is the one with the highest build number in its name
-      for (const a of rel.assets || []) { const m = /-b(\d+)\.apk$/.exec(a.name || ''); if (m && (!best || +m[1] > best.build)) best = { build: +m[1], url: a.browser_download_url }; }
+      for (const a of rel.assets || []) { const m = /-b(\d+)\.apk$/.exec(a.name || ''); if (m && (!best || +m[1] > best.build)) best = { build: +m[1], url: a.browser_download_url, name: a.name }; }
       if (!best || best.build <= Number(updInfo.versionCode)) { setUpd({ state: 'none' }); return upd; }
-      const version = String(rel.tag_name || '').replace(/^v/, '') || `build ${best.build}`;
+      const version = ((/Android-([\d.]+)-b\d+\.apk$/.exec(best.name) || [])[1]) || `build ${best.build}`; // the phone's own version, not the Windows release tag
       setUpd({ state: 'downloading', version, percent: 0 });
       await updater.download({ url: best.url });
       setUpd({ state: 'ready', version });

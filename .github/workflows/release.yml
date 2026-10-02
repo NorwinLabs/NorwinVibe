@@ -186,8 +186,8 @@ jobs:
       - name: Get version info
         id: get_version
         run: |
-          VERSION_NAME=$(grep '^VERSION_NAME' version.properties | tr -d '\r' | cut -d'=' -f2)
           VERSION_CODE=$(grep '^VERSION_CODE' version.properties | tr -d '\r' | cut -d'=' -f2)
+          VERSION_NAME=$(grep '^VERSION_NAME' version.properties | tr -d '\r' | cut -d'=' -f2).$VERSION_CODE   # <major.minor>.<build>
           APK="NorwinVibe-Android-${VERSION_NAME}-b${VERSION_CODE}.apk"
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
