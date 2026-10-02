@@ -4,7 +4,7 @@ body.mobile { padding: 0; height: 100%; }
 .mobile .card { border-radius: 0; box-shadow: none; clip-path: none; animation: none; padding: 12px 20px calc(18px + env(safe-area-inset-bottom, 0px)); }
 
 /* things that only make sense with a mouse / a desktop window */
-.mobile #btn-mini, .mobile #btn-close, .mobile #btn-full, .mobile #btn-tray, .mobile #sw-pin, .mobile .hint,
+.mobile #btn-mini, .mobile #btn-close, .mobile #btn-minimize, .mobile #btn-full, .mobile #btn-tray, .mobile #sw-pin, .mobile .hint,
 .mobile .sw[data-pref="snap"], .mobile .sw[data-pref="autostart"], .mobile .sw[data-pref="fade"], .mobile .sw[data-pref="toasts"] { display: none !important; }
 .mobile .win-btns { opacity: 1; }
 .mobile .wbtn { width: 38px; height: 38px; }

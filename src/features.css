@@ -98,7 +98,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
   opacity: 0; transform: translate(-50%, -6px); transition: opacity .25s, transform .3s var(--ease); pointer-events: none; white-space: nowrap; }
 .hud.show { opacity: 1; transform: translate(-50%, 0); }
 
-.mini .wbtn:not(#btn-mini):not(.close):not(#btn-mute) { display: none; }
+.mini .wbtn:not(#btn-mini):not(#btn-minimize):not(.close):not(#btn-mute) { display: none; }
 .mini .pop { display: none; }
 
 /* ================= ambient (full screen) ================= */

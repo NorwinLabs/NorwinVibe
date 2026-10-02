@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   sleep: (mins) => ipcRenderer.send('sleep:set', mins),
   close: () => ipcRenderer.send('win:close'),
   minimize: () => ipcRenderer.send('win:minimize'),
+  minimizeWindow: () => ipcRenderer.send('win:minimizeWindow'),
   pin: (on) => ipcRenderer.send('win:pin', on),
   mini: (on) => ipcRenderer.send('win:mini', on),
   fullscreen: (on) => ipcRenderer.send('win:fullscreen', on),

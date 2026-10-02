@@ -295,6 +295,7 @@ let mini = false;
 const setMini = (on, push = true) => { mini = on; document.body.classList.toggle('mini', on); if (push) bridge.mini(on); requestAnimationFrame(fitTitle); setTimeout(fitTitle, 400); };
 el.mini.onclick = () => setMini(!mini);
 $('btn-close').onclick = () => bridge.close();
+$('btn-minimize').onclick = () => bridge.minimizeWindow && bridge.minimizeWindow();
 el.card.addEventListener('dblclick', (e) => { if (e.target.closest('button, .bar, .pop, .vinyl, .lyrics')) return; setMini(!mini); });
 const prefsReady = bridge.prefs();
 prefsReady.then((p) => setMini(p.mini, false));
@@ -467,6 +468,6 @@ function demoApi() {
     storeTestUnlock: async (id) => { const o = JSON.parse(localStorage.getItem('demo.owned') || '[]'); localStorage.setItem('demo.owned', JSON.stringify([...new Set([...o, id])])); return { ok: true }; },
     toast() {}, sleep() {}, onSleep() {}, onPin() {}, fullscreen() {},
     lyrics: async () => ({ synced: ['[00:00.00] Waiting in a car', '[00:04.50] Waiting for a ride in the dark', '[00:09.00] The night city grows', '[00:13.50] Look and see the casting shadows', '[00:18.00] Neon lights a way for me', '[00:22.50] Down the road we go', '[00:27.00] Midnight city never sleeps', '[00:31.50] Hold me through the dark', '[00:36.00] Sing along and let it start', '[00:40.50] We are the city lights'].join('\n'), plain: '' }),
-    close() {}, minimize() {}, pin() {}, mini() {},
+    close() {}, minimize() {}, minimizeWindow() {}, pin() {}, mini() {},
   };
 }

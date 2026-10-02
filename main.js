@@ -503,6 +503,7 @@ ipcMain.on('screensaver:state', (_e, on) => {
 ipcMain.on('dev:screensaver', () => { if (devActive) toRenderer('screensaver:request'); });
 ipcMain.on('sleep:set', (_e, mins) => setSleep([0, 15, 30, 60].includes(mins) ? mins : 0));
 ipcMain.on('win:close', () => app.quit());
+ipcMain.on('win:minimizeWindow', () => { if (win && !win.isDestroyed()) win.minimize(); }); // the top-bar button: a normal minimise to the taskbar
 ipcMain.on('win:minimize', () => win.hide()); // lives in the tray; click the tray icon to bring it back
 let ghost = false; // click-through: the player floats over other windows and mouse clicks go to whatever is underneath
 function setGhost(on) {
