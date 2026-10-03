@@ -1,0 +1,19 @@
+name = "norwinvibe-licenses"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# KV namespace that remembers which orders already got a key (Stripe retries webhooks) and lets the thank-you page show it.
+#   npx wrangler kv namespace create KEYS      -> paste the id below
+[[kv_namespaces]]
+binding = "KEYS"
+id = "REPLACE_WITH_KV_ID"
+
+[vars]
+FROM_EMAIL = "NorwinVibe <licenses@example.com>"   # a sender verified in Resend
+# Fallback when a Payment Link has no `item` metadata: { "<Stripe payment link id>": "pro" | "cyberpunk" | "nightcity" }
+LINK_ITEMS = "{}"
+
+# Secrets (npx wrangler secret put NAME):
+#   LICENSE_PRIVATE_KEY      contents of .licensing/private.pem
+#   STRIPE_WEBHOOK_SECRET    whsec_... from the Stripe webhook endpoint
+#   RESEND_API_KEY           re_... from resend.com
