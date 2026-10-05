@@ -261,7 +261,7 @@ el.play.onclick = () => {
 el.prev.onclick = () => send('prev');
 el.next.onclick = () => send('next');
 el.shuffle.onclick = () => send(`shuffle:${st.shuffle ? 0 : 1}`);
-el.repeat.onclick = () => send(`repeat:${{ None: 'List', List: 'Track', Track: 'None' }[st.repeat] || 'List'}`);
+el.repeat.onclick = () => send(`repeat:${(st.repeatEmulated ? { None: 'Track', Track: 'None' } : { None: 'List', List: 'Track', Track: 'None' })[st.repeat] || (st.repeatEmulated ? 'Track' : 'List')}`); // browser videos only know "repeat this one"
 const seekTo = (s) => { s = Math.max(0, Math.min(st.dur || s, s)); st.pos = s; recvAt = performance.now(); send(`seek:${s.toFixed(2)}`); };
 
 window.addEventListener('keydown', (e) => {
