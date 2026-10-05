@@ -7,6 +7,7 @@ const { autoUpdater } = require('electron-updater');
 const { createObsServer } = require('./lib/obs.js');
 const { DiscordRpc } = require('./lib/discord.js');
 const { createFader } = require('./lib/fade.js');
+const { createEmulator } = require('./lib/emulate.js');
 const { cleanMeta } = require('./src/titles.js');
 const { spawn } = require('child_process');
 const readline = require('readline');
@@ -97,7 +98,9 @@ function addLicense(key) {
   return o;
 }
 
-const sendCmd = (c) => { if (helper?.stdin.writable) helper.stdin.write(c + '\n'); };
+const rawSend = (c) => { if (helper?.stdin.writable) helper.stdin.write(c + '\n'); };
+const emu = createEmulator(rawSend); // repeat + shuffle for players (YouTube...) that do not offer them
+const sendCmd = (c) => { if (!emu.cmd(c)) rawSend(c); };
 const toRenderer = (ch, ...a) => { if (win && !win.isDestroyed()) win.webContents.send(ch, ...a); };
 
 function clampToScreen(x, y, w, h) {
@@ -237,7 +240,8 @@ function startHelper() {
 
   readline.createInterface({ input: helper.stdout }).on('line', (line) => {
     try {
-      const msg = JSON.parse(line);
+      let msg = JSON.parse(line);
+      if (msg.type === 'state') msg = emu.state(msg);
       toRenderer(msg.type === 'art' ? 'media:art' : 'media:state', msg);
       onMedia(msg);
       trackMedia(msg);
