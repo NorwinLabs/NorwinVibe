@@ -283,6 +283,7 @@ function measureArm() {
 }
 /* Lifting and lowering the stylus: `liftPos` is 0 with the needle in the groove and 1 raised. A small spring moves it, so putting
    it down settles with a tiny bounce and picking it up eases away. Raised = a touch nearer the viewer (bigger, longer shadow). */
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let liftPos = 1, liftVel = 0;
 function stepLift(dt, playing) {
   const target = playing || needleDrag ? 0 : 1, lowering = target === 0;
@@ -301,7 +302,7 @@ function updateArm(t, pos) {
   const playing = el.card.classList.contains('playing');
   stepLift(dt, playing);
   if (needleDrag) { applyArm(); return; } // the pointer sets the angle while dragging
-  let target = REST_DEG;
+  let target = REST_DEG + (st.active || reduceMotion.matches ? 0 : Math.sin(t / 1800) * 0.9); // parked, with a barely-there sway while idle
   if (armRange && st.active) {
     const p = st.dur > 0 ? Math.min(1, Math.max(0, pos / st.dur)) : 0;
     target = armRange.out + (armRange.inn - armRange.out) * p; // paused too: stays where the song is, just lifted
@@ -354,6 +355,41 @@ function featFrame(t, pos) {
   }
 }
 
+/* ---------- the idle card: resume, recently played, and the last cover as a dim backdrop ---------- */
+function renderIdle(active) {
+  const box = $('idle-extra'); if (!box) return;
+  box.textContent = '';
+  if (active) return;
+  const last = bridge.idleResume && bridge.idleResume();
+  if (last) {
+    const b = document.createElement('button'); b.className = 'act resume';
+    b.textContent = `\u25B6  Resume \u00B7 ${last.title}`; b.title = last.artist || '';
+    b.onclick = () => bridge.idlePlay && bridge.idlePlay();
+    box.appendChild(b);
+  }
+  const recent = store.get('nv.history').slice(0, 3);
+  if (recent.length) {
+    const row = document.createElement('div'); row.className = 'idle-recent';
+    for (const e of recent) {
+      const c = document.createElement('button'); c.className = 'chip-recent'; c.title = `${e.artist ? e.artist + ' \u2013 ' : ''}${e.title}`;
+      const th = document.createElement('i'); if (e.thumb) th.style.backgroundImage = `url("${e.thumb}")`;
+      const tx = document.createElement('span'); tx.textContent = e.title;
+      c.append(th, tx);
+      c.onclick = () => { if (bridge.playRecent) bridge.playRecent(e.id); else togglePop('history'); };
+      row.appendChild(c);
+    }
+    box.appendChild(row);
+  }
+}
+window.addEventListener('vibe:library', () => { if (!st.active) renderIdle(false); });
+function idleDecor() { // nothing is playing: borrow the colours and a faint blur of the last cover
+  if (st.active) return;
+  const e = store.get('nv.history').find((x) => x.thumb);
+  if (!e) return;
+  el.bg.style.backgroundImage = `url("${e.thumb}")`; el.bg.classList.add('on');
+  if (typeof applyPalette === 'function') applyPalette(e.thumb);
+}
+
 /* ---------- history & favourites ---------- */
 const store = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
@@ -380,6 +416,7 @@ function saveEntry(entry) { // newest first, de-duplicated, capped
   list.unshift(entry); store.set('nv.history', list.slice(0, 60));
 }
 function onTrackChange(m, d) {
+  renderIdle(m.active); if (!m.active) setTimeout(idleDecor, 0);
   curDisplay = m.active ? d : null;
   curEntry = null; curId = '';
   $('btn-fav').classList.remove('on');

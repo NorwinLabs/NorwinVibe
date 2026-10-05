@@ -584,6 +584,11 @@
   /* ================= the bridge the shared UI talks to ================= */
   const storeCfg = () => window.STORE_CONFIG || { items: {} };
   window.api = {
+    idleResume: () => { const l = LS.get('vibe.last', null), t = l && lib.find((x) => x.id === l.id); return t ? { title: t.title, artist: t.artist || '' } : null; }, // the idle card's "Resume" button
+    playRecent: (id) => { // a song tapped under "recently played" on the idle card (ids are "artist|title")
+      const t = lib.find((x) => `${x.artist || ''}|${x.title}`.toLowerCase() === id) || lib.find((x) => id.endsWith(`|${x.title.toLowerCase()}`));
+      if (t) { source = { type: 'library', id: null }; buildOrder(t.id); loadTrack(t.id, true); }
+    },
     idlePlay: () => startPlayback(), noLoopback: true, idleText: 'Add music from your phone to get started',
     onState: (f) => { cb.state = f; }, onArt: (f) => { cb.art = f; }, onPin: () => {}, onSleep: (f) => { cb.sleep = f; }, onOwned: (f) => { cb.owned = f; },
     cmd: (c) => {

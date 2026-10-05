@@ -186,6 +186,9 @@ function fitTitle() {
   }
 }
 
+/* what the idle card says instead of "Nothing playing" */
+function greeting() { const h = new Date().getHours(); return h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
+
 /* ---------- state ---------- */
 let lastKey = null;
 // After a play/pause click, ignore updates that still report the old state until the app confirms (or ~1.5s passes).
@@ -213,8 +216,8 @@ function onState(m) {
   if (key !== lastKey) {
     lastKey = key;
     const d = m.active ? display(m) : null;
-    el.title.textContent = m.active ? (d.title || 'Unknown title') : 'Nothing playing';
-    el.artist.textContent = m.active ? d.sub || prettyApp(m.app) : (bridge.idleText || 'Play something in Spotify, your browser, or any media app');
+    el.title.textContent = m.active ? (d.title || 'Unknown title') : greeting();
+    el.artist.textContent = m.active ? d.sub || prettyApp(m.app) : (bridge.idleText || 'Start something in any media app');
     el.card.title = m.active && d.cleaned ? `Original: ${m.title} — ${m.artist}` : '';
     el.meta.classList.remove('enter'); void el.meta.offsetWidth; el.meta.classList.add('enter');
     fitTitle();
