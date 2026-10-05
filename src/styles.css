@@ -16,7 +16,8 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
   position: relative; height: 100%; border-radius: 28px; overflow: hidden;
   display: grid; grid-template-rows: auto 1fr auto auto auto; padding: 14px 20px 20px;
   background: #0c0c12; -webkit-app-region: drag;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 18px 40px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.4);
+  /* the window is transparent and only 16px bigger than the card: a larger shadow gets cut off at the window edge and shows up as a faded box */
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 3px 9px rgba(0,0,0,.35);
   animation: pop .7s var(--ease) both;
 }
 @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
