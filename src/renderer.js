@@ -67,7 +67,7 @@ function randomPalette(key) {
 
 /* Some sources hand over their own logo (a browser's icon, a favicon) instead of cover art. It is not a picture of the song, so
    it is not shown. Logos have transparent corners and gaps, which photos and thumbnails do not; favicons are also tiny. */
-const artRejected = new Set(); let artCheckToken = 0, artPending = '';
+const artRejected = new Set(); let artCheckToken = 0, artPending = '', shownKey = null, swapTimer = 0; // shownKey: the song whose cover is on the record
 function isAppIcon(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -145,10 +145,19 @@ function applyPalette(dataUrl) {
 }
 
 function showNoArt() { // blank background + a colour of its own for this song
-  artWide = false;
+  artWide = false; shownKey = null; clearTimeout(swapTimer); el.label.classList.remove('changing');
   el.label.classList.remove('art'); el.label.style.backgroundImage = '';
   el.bg.style.backgroundImage = ''; el.bg.classList.remove('on'); el.wall.classList.add('on');
   applyPalette('');
+}
+/* a new song arrived but its cover has not: keep the old cover (dimmed) for a moment instead of flashing an empty record,
+   and give up on it if the new one never comes */
+function keepArtWhileLoading(key) {
+  if (!el.label.classList.contains('art')) { showArt(''); return; }
+  ++artCheckToken; artPending = ''; shownKey = null;
+  el.label.classList.add('changing');
+  clearTimeout(swapTimer);
+  swapTimer = setTimeout(() => { if (lastKey === key && shownKey !== key) showNoArt(); }, 900);
 }
 function showArt(data) {
   const token = ++artCheckToken;
@@ -158,7 +167,7 @@ function showArt(data) {
     if (token !== artCheckToken) return; // another song arrived while checking
     artPending = '';
     if (r.icon) { artRejected.add(key); if (artRejected.size > 300) artRejected.clear(); if (bridge.artRejected) bridge.artRejected(key); showNoArt(); return; }
-    artRejected.delete(key); artWide = false; el.wall.classList.remove('on');
+    artRejected.delete(key); artWide = false; shownKey = key; clearTimeout(swapTimer); el.label.classList.remove('changing'); el.wall.classList.remove('on');
     const i = new Image(); i.onload = () => { artWide = i.naturalWidth / i.naturalHeight > 1.5; if (st.active) el.source.textContent = sourceLabel(st); }; i.src = data;
     el.label.classList.add('art'); el.label.style.backgroundImage = `url("${data}")`;
     el.bg.style.backgroundImage = `url("${data}")`; el.bg.classList.add('on');
@@ -176,6 +185,9 @@ function fitTitle() {
     s.classList.add('scroll');
   }
 }
+
+/* what the idle card says instead of "Nothing playing" */
+function greeting() { const h = new Date().getHours(); return h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
 
 /* ---------- state ---------- */
 let lastKey = null;
@@ -204,17 +216,17 @@ function onState(m) {
   if (key !== lastKey) {
     lastKey = key;
     const d = m.active ? display(m) : null;
-    el.title.textContent = m.active ? (d.title || 'Unknown title') : 'Nothing playing';
-    el.artist.textContent = m.active ? d.sub || prettyApp(m.app) : (bridge.idleText || 'Play something in Spotify, your browser, or any media app');
+    el.title.textContent = m.active ? (d.title || 'Unknown title') : greeting();
+    el.artist.textContent = m.active ? d.sub || prettyApp(m.app) : (bridge.idleText || 'Start something in any media app');
     el.card.title = m.active && d.cleaned ? `Original: ${m.title} — ${m.artist}` : '';
     el.meta.classList.remove('enter'); void el.meta.offsetWidth; el.meta.classList.add('enter');
     fitTitle();
     if (typeof onTrackChange === 'function') onTrackChange(m, d);
-    if (m.active && art.key !== key) showArt('');
+    if (m.active && art.key !== key) keepArtWhileLoading(key);
     if (!m.active) showArt('');
     el.card.classList.add('swap'); setTimeout(() => el.card.classList.remove('swap'), 450);
   }
-  if (m.active && art.key === key && art.data && !el.label.classList.contains('art') && !artRejected.has(key) && artPending !== key) showArt(art.data);
+  if (m.active && art.key === key && art.data && shownKey !== key && !artRejected.has(key) && artPending !== key) showArt(art.data);
 
   el.prev.disabled = !m.active || m.canPrev === false;
   el.next.disabled = !m.active || m.canNext === false;

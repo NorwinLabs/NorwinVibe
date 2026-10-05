@@ -16,7 +16,8 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
   position: relative; height: 100%; border-radius: 28px; overflow: hidden;
   display: grid; grid-template-rows: auto 1fr auto auto auto; padding: 14px 20px 20px;
   background: #0c0c12; -webkit-app-region: drag;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 18px 40px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.4);
+  /* the window is transparent and only 16px bigger than the card: a larger shadow gets cut off at the window edge and shows up as a faded box */
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 3px 9px rgba(0,0,0,.35);
   animation: pop .7s var(--ease) both;
 }
 @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
@@ -139,9 +140,24 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-
 .playing .ico-play { opacity: 0; transform: scale(.4) rotate(90deg); }
 .playing .ico-pause { opacity: 1; transform: none; }
 
-/* ---------- idle ---------- */
+/* ---------- changing songs: the old cover fades out instead of the record going blank ---------- */
+.label { transition: opacity .35s, filter .35s; }
+.label.changing { opacity: .45; filter: saturate(.5) blur(1.5px); }
+
+/* ---------- idle: the record stays alive and the play button invites a tap ---------- */
 .idle .meta .artist { font-size: 12px; }
 .idle .progress, .idle .ctl:not(.play) { opacity: .35; pointer-events: none; }
+.idle .label { filter: saturate(.45) brightness(.85); }
+.idle .ctl.play::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid var(--accent); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .idle .glow { opacity: .2; animation: breathe 5s ease-in-out infinite; }
+  .idle .vinyl-wrap { animation: idlefloat 7s ease-in-out infinite; }
+  .idle .ctl.play::after { animation: invite 2.8s ease-out infinite; }
+  .idle .meta .artist { animation: idlefade 4s ease-in-out infinite; }
+}
+@keyframes idlefloat { 50% { transform: translateX(-14px) translateY(-4px); } }
+@keyframes invite { 0% { opacity: .55; transform: scale(.96); } 70%, 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes idlefade { 50% { opacity: .6; } }
 
 /* ---------- mini mode ---------- */
 .mini .card { grid-template-rows: none; grid-template-columns: 76px 1fr 150px; grid-template-areas: "stage meta controls" "stage progress progress";
