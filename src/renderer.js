@@ -331,7 +331,7 @@ if (window.api && !window.api.noLoopback) initAudio();
 
 let calmMode = false; // Calm mode: no spin, no moving ring (set from extras.js)
 const vctx = el.viz.getContext('2d');
-let accentCache = ['#8b5cf6', '#ec4899'], accentAt = -1e9;
+let accentCache = ['#8b5cf6', '#ec4899'], accentAt = -1e9, vizRatio = 118 / 320; // vizRatio: record radius / ring canvas size
 function drawViz(t, playing) {
   const mode = document.documentElement.dataset.viz || 'bars';
   const W = el.viz.width, c = W / 2;
@@ -343,30 +343,39 @@ function drawViz(t, playing) {
     let v = 0;
     if (playing) {
       if (analyser) v = freq[2 + Math.floor((m / (BARS / 2)) ** 1.6 * 90)] / 255;
-      else v = .35 + .3 * Math.sin(t / 260 + m * .55) * Math.sin(t / 700 + m * .2);
+      else v = .42 + .38 * Math.sin(t / 260 + m * .55) * Math.sin(t / 700 + m * .2);
+      v = Math.min(1, v * 1.3); // a livelier ring: quiet music still moves it
     }
     levels[i] += (v - levels[i]) * (v > levels[i] ? .5 : .12);
   }
-  const base = W * (118 / 272);
+  const base = W * vizRatio;
   const maxLen = c - base - (mode === 'cyber' ? 14 : mode === 'nightcity' ? 6 : 3); // keep everything inside the canvas
   const at = (i, r) => { const a = (i / BARS) * Math.PI * 2 - Math.PI / 2; return [c + Math.cos(a) * r, c + Math.sin(a) * r]; };
-  if (t - accentAt > 400) { const cs = getComputedStyle(document.documentElement); accentCache = [cs.getPropertyValue('--accent').trim() || '#8b5cf6', cs.getPropertyValue('--accent-2').trim() || '#ec4899']; accentAt = t; } // reading styles every frame forces a style recalculation
+  if (t - accentAt > 400) { const cs = getComputedStyle(document.documentElement); accentCache = [cs.getPropertyValue('--accent').trim() || '#8b5cf6', cs.getPropertyValue('--accent-2').trim() || '#ec4899']; accentAt = t; if (el.viz.offsetWidth) vizRatio = (el.vinyl.parentElement.offsetWidth / 2) / el.viz.offsetWidth; } // reading styles every frame forces a style recalculation
   const [a1, a2] = accentCache;
   const g = vctx.createLinearGradient(0, 0, W, W); g.addColorStop(0, a1); g.addColorStop(1, a2);
   vctx.lineCap = 'round'; vctx.lineJoin = 'round';
+  // a bass pulse: a soft halo behind the ring that swells with the low end
+  let bass = 0; for (let i = 0; i < 8; i++) bass += levels[i]; bass /= 8;
+  if (bass > .02) {
+    const hp = vctx.createRadialGradient(c, c, base * .9, c, c, base + maxLen * (1.1 + bass));
+    hp.addColorStop(0, a1); hp.addColorStop(1, 'rgba(0,0,0,0)');
+    vctx.globalAlpha = Math.min(.55, bass * .6); vctx.fillStyle = hp; vctx.beginPath(); vctx.arc(c, c, base + maxLen * (1.1 + bass), 0, Math.PI * 2); vctx.fill();
+  }
 
   if (mode === 'bars') {
-    vctx.strokeStyle = g; vctx.lineWidth = 5;
+    vctx.strokeStyle = g; vctx.lineWidth = 8; vctx.shadowColor = a1; vctx.shadowBlur = 14;
     for (let i = 0; i < BARS; i++) {
       const [x1, y1] = at(i, base), [x2, y2] = at(i, base + 2 + levels[i] * (maxLen - 2));
       vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2);
-      vctx.globalAlpha = .35 + levels[i] * .65; vctx.stroke();
+      vctx.globalAlpha = .4 + levels[i] * .6; vctx.stroke();
     }
+    vctx.shadowBlur = 0;
   } else if (mode === 'dots') {
     vctx.fillStyle = g;
     for (let i = 0; i < BARS; i++) {
       const [x, y] = at(i, base + 6 + levels[i] * (maxLen - 8));
-      vctx.beginPath(); vctx.arc(x, y, 2.5 + levels[i] * 4, 0, Math.PI * 2);
+      vctx.beginPath(); vctx.arc(x, y, 4 + levels[i] * 7, 0, Math.PI * 2);
       vctx.globalAlpha = .45 + levels[i] * .55; vctx.fill();
     }
   } else if (mode === 'wave') {
@@ -374,8 +383,8 @@ function drawViz(t, playing) {
     vctx.beginPath();
     pts.forEach((p, i) => { const n = pts[(i + 1) % BARS], mx = (p[0] + n[0]) / 2, my = (p[1] + n[1]) / 2; if (!i) vctx.moveTo(mx, my); else vctx.quadraticCurveTo(p[0], p[1], mx, my); });
     const f = pts[0], n = pts[1]; vctx.quadraticCurveTo(f[0], f[1], (f[0] + n[0]) / 2, (f[1] + n[1]) / 2);
-    vctx.strokeStyle = g; vctx.lineWidth = 4; vctx.globalAlpha = .95; vctx.stroke();
-    vctx.fillStyle = g; vctx.globalAlpha = .12; vctx.fill();
+    vctx.strokeStyle = g; vctx.lineWidth = 7; vctx.shadowColor = a1; vctx.shadowBlur = 14; vctx.globalAlpha = .95; vctx.stroke(); vctx.shadowBlur = 0;
+    vctx.fillStyle = g; vctx.globalAlpha = .22; vctx.fill();
   } else if (mode === 'cyber') { // twin offset neon bars (chromatic split) + a slowly turning dashed outer ring
     for (const [col, dx] of [['#05d9e8', 2.5], ['#ff2a6d', -2.5]]) {
       vctx.strokeStyle = col; vctx.lineWidth = 3; vctx.shadowColor = col; vctx.shadowBlur = 10;
@@ -421,15 +430,18 @@ el.vinyl.addEventListener('pointerdown', (e) => {
   el.vinyl.setPointerCapture(e.pointerId);
   scratch = { pos: livePos(), startPos: livePos(), lastAng: pointerAngle(e) };
   document.body.classList.add('scratching');
+  scratch.lastAt = performance.now(); if (typeof ScratchFX !== 'undefined') ScratchFX.start();
 });
 el.vinyl.addEventListener('pointermove', (e) => {
   if (!scratch) return;
   const a = pointerAngle(e); let d = a - scratch.lastAng;
   if (d > 180) d -= 360; if (d < -180) d += 360;
+  const nowT = performance.now(), dtS = Math.max(8, nowT - scratch.lastAt) / 1000; scratch.lastAt = nowT;
+  if (typeof ScratchFX !== 'undefined') ScratchFX.update(d / dtS);
   scratch.lastAng = a; angle = (angle + d + 360) % 360; el.vinyl.style.transform = `rotate(${angle}deg)`;
   scratch.pos = Math.min(st.dur, Math.max(0, scratch.pos + d / 360 * SCRATCH_SECS_PER_TURN));
 });
-const endScratch = () => { if (!scratch) return; const p = scratch.pos; scratch = null; document.body.classList.remove('scratching'); seekTo(p); };
+const endScratch = () => { if (!scratch) return; const p = scratch.pos; scratch = null; if (typeof ScratchFX !== 'undefined') ScratchFX.stop(); document.body.classList.remove('scratching'); seekTo(p); };
 el.vinyl.addEventListener('pointerup', endScratch);
 el.vinyl.addEventListener('pointercancel', endScratch);
 let lastDraw = 0, lastPlayingAt = 0, lastPct = '', lastCur = '', lastDurTxt = '';
@@ -449,6 +461,7 @@ function frame(t) {
   if (!scratch || scratch.needle) { if (vel > .05) { angle = (angle + vel * dt) % 360; el.vinyl.style.transform = `rotate(${angle}deg)`; } }
 
   if (!resting || el.viz.dataset.clean !== '1') { drawViz(t, playing); el.viz.dataset.clean = resting && !levels.some((v) => v > .01) ? '1' : ''; }
+  if (scratch && typeof ScratchFX !== 'undefined' && performance.now() - scratch.lastAt > 70) ScratchFX.update(0); // holding the record still: the scratch goes quiet
   const scrubbing = dragging || scratch;
   const frac = dragging ? dragFrac : scratch ? scratch.pos / (st.dur || 1) : (st.dur > 0 ? livePos() / st.dur : 0);
   const pct = `${(Math.min(1, Math.max(0, frac)) * 100).toFixed(2)}%`;

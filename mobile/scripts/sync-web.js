@@ -11,7 +11,7 @@ fs.rmSync(www, { recursive: true, force: true });
 fs.mkdirSync(path.join(www, 'vendor'), { recursive: true });
 
 // 1. shared UI code: copied verbatim, so the desktop and phone apps stay in step
-for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js', 'pro.js', 'extras.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
+for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js', 'pro.js', 'extras.js', 'scratchfx.js', 'dancers.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
 // 2. phone-only code
 for (const f of ['mobile.js', 'mobile.css']) fs.copyFileSync(path.join(mobile, 'src', f), path.join(www, f));
 // 3. vendored libraries (no CDN at runtime, so the app works offline)
