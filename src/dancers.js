@@ -1,6 +1,6 @@
-/* One little pixel guy. When music plays he climbs out from behind the record player and busts a move on every beat (disco, wave,
-   robot, jump, twist, macarena: he switches style every few bars); when it stops he slips back behind it. In full screen /
-   ambient mode he dances at the bottom of the screen.
+/* One little pixel guy. When music plays he climbs out from behind the record player, then wanders around the screen: he walks to
+   a spot, busts moves on the beat for a few bars (disco, wave, robot, jump, twist, macarena), and walks on to the next spot. When
+   the music stops he walks back and slips behind the record player.
    Settings > Look: "Dancing pixel guy" (on / off) and "Dancer" (Guy, Robot, Alien). */
 (() => {
   const stage = document.getElementById('stage'), card = document.getElementById('card'), tilt = document.getElementById('tilt');
@@ -21,9 +21,10 @@
     robot:    [['out', 'bent', 'stand', 'stand', 0], ['bent', 'out', 'wide', 'wide', 0], ['out', 'out', 'stand', 'stand', 0], ['bent', 'bent', 'wide', 'wide', 0]],
     jump:     [['up', 'up', 'wide', 'wide', 2], ['up', 'up', 'stand', 'stand', 3], ['diag', 'diag', 'wide', 'wide', 2], ['up', 'up', 'tip', 'tip', 3]],
     twist:    [['bent', 'flare', 'kick', 'stand', 0], ['flare', 'bent', 'stand', 'kick', 1], ['out', 'hip', 'cross', 'stand', 0], ['hip', 'out', 'stand', 'cross', 1]],
+    walk:     [['down', 'hip', 'step', 'stand', 0], ['hip', 'down', 'stand', 'step', 0]],
     macarena: [['out', 'down', 'stand', 'stand', 0], ['out', 'out', 'stand', 'stand', 0], ['across', 'out', 'stand', 'stand', 1], ['across', 'across', 'wide', 'wide', 1], ['hip', 'hip', 'squat', 'squat', 0], ['up', 'up', 'wide', 'wide', 2]],
   };
-  const STYLES = Object.keys(MOVES);
+  const STYLES = Object.keys(MOVES).filter((k) => k !== 'walk'); // the dances (walking is separate)
   const HEADS = {
     people: (put) => { for (let x = 3; x <= 5; x++) for (let y = 1; y <= 3; y++) put(x, y, 'h'); },
     robots: (put) => { put(4, 0, 'b'); for (let x = 3; x <= 5; x++) for (let y = 1; y <= 3; y++) put(x, y, 'h'); put(3, 2, 'e'); put(5, 2, 'e'); },
@@ -32,7 +33,7 @@
   function sprite(put, pack, move, beat) {
     (HEADS[pack] || HEADS.people)(put);
     for (let y = 4; y <= 6; y++) for (let x = 3; x <= 5; x++) put(x, y, 'b');
-    const m = MOVES[move][beat % MOVES[move].length];
+    const loop = MOVES[move], m = loop[((beat % loop.length) + loop.length) % loop.length];
     const arm = (name, sx, dir) => ARM[name].forEach(([dx, dy]) => put(sx + dx * dir, 4 + dy, 'b'));
     arm(m[0], 2, 1); arm(m[1], 6, -1);
     LEG[m[2]].forEach(([x, y]) => put(x, y, 'b'));
@@ -40,24 +41,22 @@
     return m[4];
   }
 
-  const mk = (cls) => { const c = document.createElement('canvas'); c.className = cls; return c; };
-  const cvStage = mk('dancers'), cvCrowd = mk('dancers crowd');
-  stage.insertBefore(cvStage, tilt || stage.firstChild); // behind the record player, so they can duck behind it
-  card.appendChild(cvCrowd);
+  const cvBack = document.createElement('canvas'), cvFront = document.createElement('canvas');
+  cvBack.className = 'dancers back'; cvFront.className = 'dancers front';
+  stage.insertBefore(cvBack, tilt || stage.firstChild); // behind the record player, so he can slip behind it
+  card.insertBefore(cvFront, card.querySelector('.meta') || null); // over the record, but under the title, bar and buttons
 
   const state = { raf: 0, lastT: 0, lastPaint: 0, colors: ['#8b5cf6', '#ec4899', '#ffffff'], colorAt: -1e9, step: 0, lastBeat: 0, beats: [], avg: 0.2, tick: 0, geo: null, geoAt: -1e9 };
-  const crowds = new Map();
-  const crowd = (cv, n) => { let a = crowds.get(cv); if (!a || a.length !== n) { a = Array.from({ length: n }, (_, i) => ({ x: (i + 0.5) / n, delay: i * 120 + Math.random() * 80, rise: 0, ph: (i * 3) % 8, hue: i, on: false, t0: 0, style: i % STYLES.length })); crowds.set(cv, a); } return a; };
+  const guy = { st: 'hidden', x: 0, y: 0, tx: 0, ty: 0, dir: 1, style: 0, until: 0, vis: 0, hue: 0, walkT: 0, back: true };
 
   const prefOn = () => !(typeof P !== 'undefined' && P && P.dancers === false);
   const pack = () => (typeof P !== 'undefined' && P && P.dancerpack) || 'people';
-  const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches; // they still dance, but calmly
-  const isFull = () => document.body.classList.contains('fullscreen'), isMini = () => document.body.classList.contains('mini');
+  const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches; // he still dances, but calmly
+  const isMini = () => document.body.classList.contains('mini'), isFull = () => document.body.classList.contains('fullscreen');
   const playing = () => card.classList.contains('playing');
-  const ease = (x) => 1 - Math.pow(1 - x, 3), lerp = (a, b, t) => a + (b - a) * t;
 
   function bassNow() { return typeof levels !== 'undefined' ? (levels[1] + levels[2] + levels[3] + levels[4]) / 4 : 0.4; }
-  function beat(t) { // a jump in low-end energy moves everyone to the next step; with no beat they keep a gentle tempo
+  function beat(t) { // a jump in low-end energy is a beat: he moves to the next step on it; with no beat he keeps a gentle tempo
     const b = bassNow(); state.avg += (b - state.avg) * 0.03;
     if (b > state.avg * 1.3 && b > 0.28 && t - state.lastBeat > 230) {
       if (state.lastBeat) { state.beats.push(t - state.lastBeat); if (state.beats.length > 8) state.beats.shift(); }
@@ -67,87 +66,82 @@
   }
   const bpm = () => { const a = state.beats; if (a.length < 3) return 0; return Math.round(60000 / (a.reduce((x, y) => x + y, 0) / a.length)); };
 
-  function drawSprite(g, x0, y0, d, hopScale, reducedMotion, fast) {
-    const body = state.colors[d.hue % 2], head = state.colors[2], det = state.colors[(d.hue + 1) % 2];
-    const style = STYLES[(d.style + Math.floor(state.step / 24)) % STYLES.length]; // everyone changes their style every few bars
-    const beatNo = state.step + d.ph; // one move per beat
-    const hopBase = sprite((x, y, k) => { g.fillStyle = k === 'h' ? head : k === 'e' ? det : body; g.fillRect(x0 + x, y0 + y, 1, 1); }, pack(), style, beatNo);
-    return reducedMotion ? 0 : Math.min(5, Math.round(hopBase * hopScale));
-  }
-
-  // where the record player is, in stage pixels, so dancers can slip in behind it
+  // where things are on the screen (viewport pixels): the record player he hides behind, and the card he walks around
   function geometry(t) {
-    if (state.geo && t - state.geoAt < 400) return state.geo;
-    const sr = stage.getBoundingClientRect(), wrap = document.querySelector('.vinyl-wrap').getBoundingClientRect(), k = sr.width / (stage.offsetWidth || 1) || 1;
-    let bottom = wrap.bottom; const pl = document.querySelector('.plinth .pf-f');
-    if (pl && document.documentElement.dataset.deck === '3d') { const pr = pl.getBoundingClientRect(); if (pr.height) bottom = Math.max(bottom, pr.bottom + 4); } // the turntable's front edge, depth included
-    state.geo = { w: stage.offsetWidth, h: stage.offsetHeight, cx: (wrap.left + wrap.width / 2 - sr.left) / k, cy: (wrap.top + wrap.height / 2 - sr.top) / k, floor: (bottom - sr.top) / k + 52 };
+    if (state.geo && t - state.geoAt < 300) return state.geo;
+    const w = document.querySelector('.vinyl-wrap').getBoundingClientRect(), c = card.getBoundingClientRect();
+    let l = w.left, r = w.right, tp = w.top, bt = w.bottom; const pl = document.querySelector('.plinth .pf-t');
+    if (pl && document.documentElement.dataset.deck === '3d') { const pr = pl.getBoundingClientRect(); if (pr.width) { l = Math.min(l, pr.left); r = Math.max(r, pr.right); tp = Math.min(tp, pr.top); bt = Math.max(bt, pr.bottom); } }
+    state.geo = { card: c, cx: w.left + w.width / 2, cy: w.top + w.height / 2, box: [l - 6, tp - 6, r + 6, bt + 6], below: bt };
     state.geoAt = t; return state.geo;
   }
+  const inside = (g, x, y) => x > g.box[0] && x < g.box[2] && y > g.box[1] && y < g.box[3];
 
-  const SC = 5, EXTRA = 70;
-  function paintStage(want, t, dt, energy, rm) {
-    const geo = geometry(t), w = Math.max(40, Math.round(geo.w / SC)), h = Math.round((geo.h + EXTRA) / SC);
-    if (cvStage.width !== w) cvStage.width = w; if (cvStage.height !== h) cvStage.height = h;
-    const g = cvStage.getContext('2d'); g.clearRect(0, 0, w, h);
-    const list = crowd(cvStage, 1), fast = bpm() > 125 || energy > 0.55;
-    const floor = Math.min(h - 3, geo.floor / SC), hideX = geo.cx / SC, hideY = geo.cy / SC - 4; // hidden = tucked behind the middle of the record player
-    let up = false;
-    for (const d of list) {
-      if (want && !d.on) { d.on = true; d.t0 = t + d.delay; } else if (!want) d.on = false;
-      const goal = want && t >= d.t0 ? 1 : 0;
-      d.rise += (goal - d.rise) * Math.min(1, dt / (goal ? 520 : 380));
-      if (d.rise < 0.012) continue;
-      up = true;
-      const e = ease(Math.min(1, d.rise)), target = d.x * w - 4.5;
-      const dancing = e > 0.96;
-      const ctx2 = g;
-      // the hop is added only when they are standing on the floor
-      const x0 = Math.round(lerp(hideX - 4.5, target, e)), y0b = lerp(hideY, floor - 8, e);
-      let hop = 0;
-      if (dancing) {
-        const px = { n: 0 };
-        hop = drawSprite(ctx2, x0, Math.round(y0b), d, fast ? 1.4 : 1, rm, fast);
-        // redraw lifted when the move says "jump": clear and draw again higher
-        if (hop && (state.step + d.ph) % 2 === 0) { g.clearRect(x0 - 1, Math.round(y0b) - 5, 11, 15); drawSprite(ctx2, x0, Math.round(y0b) - hop, d, fast ? 1.4 : 1, rm, fast); }
-      } else drawSprite(ctx2, x0, Math.round(y0b), d, 1, true, false);
-    }
-    cvStage.style.visibility = up ? 'visible' : 'hidden';
-    return up;
+  function pickSpot(g) { // somewhere on the card, mostly the lower part, away from the very edge
+    const c = g.card, mx = 34, top = c.top + Math.min(110, c.height * 0.2), pr = document.querySelector('.progress'), bot = Math.min(c.bottom - 38, (pr ? pr.getBoundingClientRect().top : c.bottom) - 6); // never onto the buttons
+    const f = 0.25 + 0.75 * Math.random();
+    return [c.left + mx + Math.random() * Math.max(10, c.width - 2 * mx), top + (bot - top) * f];
   }
-  function paintCrowd(want, t, dt, energy, rm) {
-    const sc = 8, w = Math.max(60, Math.round(window.innerWidth / sc)), h = 12;
-    if (cvCrowd.width !== w) cvCrowd.width = w; if (cvCrowd.height !== h) cvCrowd.height = h;
-    cvCrowd.style.height = `${h * sc}px`;
-    const g = cvCrowd.getContext('2d'); g.clearRect(0, 0, w, h);
-    const list = crowd(cvCrowd, 1), fast = bpm() > 125 || energy > 0.55;
-    let up = false;
-    for (const d of list) {
-      if (want && !d.on) { d.on = true; d.t0 = t + d.delay; } else if (!want) d.on = false;
-      const goal = want && t >= d.t0 ? 1 : 0;
-      d.rise += (goal - d.rise) * Math.min(1, dt / (goal ? 220 : 160));
-      if (d.rise < 0.01) continue;
-      up = true;
-      const e = ease(Math.min(1, d.rise)), x0 = Math.round(d.x * w - 4.5);
-      const hop = drawSprite(g, x0, Math.round(h - 9 + (1 - e) * 14), d, fast ? 1.4 : 1, rm, fast);
-      if (hop && (state.step + d.ph) % 2 === 0) { g.clearRect(x0 - 1, 0, 11, h); drawSprite(g, x0, Math.round(h - 9 + (1 - e) * 14) - Math.min(hop, 2), d, fast ? 1.4 : 1, rm, fast); }
+  function go(g, x, y) { guy.tx = x; guy.ty = y; guy.st = 'walk'; }
+
+  function update(t, dt, want) {
+    const g = geometry(t), sp = (isFull() ? 70 : 46) * (reduced() ? 0.6 : 1); // walking speed, pixels per second
+    if (guy.st === 'hidden') {
+      if (!want) return false;
+      guy.x = g.cx; guy.y = g.cy + 10; guy.vis = 1; guy.hue = (guy.hue + 1) % 2; guy.style = Math.floor(Math.random() * STYLES.length);
+      const first = [g.cx + (Math.random() - 0.5) * 160, g.below + 30]; go(g, first[0], first[1]);
     }
-    cvCrowd.style.visibility = up ? 'visible' : 'hidden';
-    return up;
+    if (!want && guy.st !== 'retreat') { guy.st = 'retreat'; guy.tx = g.cx; guy.ty = g.cy + 10; }
+    if (want && guy.st === 'retreat') { const p = pickSpot(g); go(g, p[0], p[1]); }
+    if (guy.st === 'walk' || guy.st === 'retreat') {
+      const dx = guy.tx - guy.x, dy = guy.ty - guy.y, d = Math.hypot(dx, dy), stepLen = sp * dt / 1000;
+      if (d <= stepLen + 1) {
+        guy.x = guy.tx; guy.y = guy.ty;
+        if (guy.st === 'retreat') { guy.st = 'hidden'; guy.vis = 0; return false; }
+        guy.st = 'dance'; guy.until = state.step + 8 + Math.floor(Math.random() * 9); guy.style = (guy.style + 1 + Math.floor(Math.random() * 3)) % STYLES.length;
+      } else { guy.x += dx / d * stepLen; guy.y += dy / d * stepLen; if (Math.abs(dx) > 2) guy.dir = dx > 0 ? 1 : -1; guy.walkT += dt; }
+    } else if (guy.st === 'dance' && state.step >= guy.until) {
+      const p = pickSpot(g); go(g, p[0], p[1]);
+    }
+    guy.back = inside(g, guy.x, guy.y - 20) || guy.st === 'retreat' && inside(g, guy.x, guy.y - 20); // behind the record player while he is in front of it on screen
+    return true;
+  }
+
+  function put(cv, g2, SCs, drawFn) { // a canvas the size of (a part of) the screen, one canvas pixel = SCs screen pixels
+    const r = cv.getBoundingClientRect(); if (!r.width) return;
+    const w = Math.max(1, Math.round(r.width / SCs)), h = Math.max(1, Math.round(r.height / SCs));
+    if (cv.width !== w) cv.width = w; if (cv.height !== h) cv.height = h;
+    const g = cv.getContext('2d'); g.clearRect(0, 0, w, h);
+    if (drawFn) drawFn(g, (x) => (x - r.left) / SCs, (y) => (y - r.top) / SCs);
   }
   function draw(t) {
     state.raf = requestAnimationFrame(draw);
     if (document.hidden) return;
-    const dt = Math.min(100, t - state.lastT); state.lastT = t;
+    const dt = Math.max(0, Math.min(100, t - state.lastT)); state.lastT = t; // (rAF can report a time just before the one kick() took)
     if (t - state.lastPaint < 30) return; // ~30 fps is plenty for chunky pixels
     state.lastPaint = t;
-    const full = isFull(), mini = isMini(), want = prefOn() && playing() && !mini;
+    const mini = isMini(), want = prefOn() && playing() && !mini;
     if (t - state.colorAt > 500) { const cs = getComputedStyle(document.documentElement); state.colors = [cs.getPropertyValue('--accent').trim() || '#8b5cf6', cs.getPropertyValue('--accent-2').trim() || '#ec4899', '#ffffff']; state.colorAt = t; }
-    const energy = beat(t), rm = reduced();
-    const a = full || mini ? false : paintStage(want, t, dt, energy, rm);
-    if (full || mini) cvStage.style.visibility = 'hidden';
-    const b = paintCrowd(want && full, t, dt, energy, rm);
-    if (!a && !b && !want) { cancelAnimationFrame(state.raf); state.raf = 0; }
+    const energy = beat(t), rm = reduced(), SCs = isFull() ? 8 : 5;
+    if (mini && guy.st !== 'hidden') { guy.st = 'hidden'; guy.vis = 0; }
+    const alive = update(t, dt, want);
+    const dancing = guy.st === 'dance', fast = bpm() > 125 || energy > 0.55;
+    const drawGuy = (g, cx, cy) => {
+      const body = state.colors[guy.hue], head = state.colors[2], det = state.colors[(guy.hue + 1) % 2];
+      const style = dancing ? STYLES[guy.style] : 'walk', beatNo = dancing ? state.step : Math.floor(guy.walkT / 190);
+      const x0 = Math.round(cx(guy.x) - 4.5), mirror = guy.dir < 0;
+      let y0 = Math.round(cy(guy.y) - 9);
+      let hop = 0;
+      const pix = (x, y, k) => { g.fillStyle = k === 'h' ? head : k === 'e' ? det : body; g.fillRect(mirror ? x0 + 8 - x : x0 + x, y0 - hop + y, 1, 1); };
+      // the hop of a move (computed first so the whole sprite lifts together)
+      const lp = MOVES[style], m = lp[((beatNo % lp.length) + lp.length) % lp.length];
+      hop = rm || !dancing ? 0 : Math.min(5, Math.round(m[4] * (fast ? 1.4 : 1)));
+      sprite(pix, pack(), style, beatNo);
+    };
+    const front = cvFront, back = cvBack;
+    if (alive && !guy.back) put(front, null, SCs, drawGuy); else put(front, null, SCs, null);
+    if (alive && guy.back) put(back, null, SCs, drawGuy); else put(back, null, SCs, null);
+    if (!alive && !want) { cancelAnimationFrame(state.raf); state.raf = 0; }
   }
   const kick = () => { if (!state.raf && prefOn() && playing()) { state.lastT = performance.now(); state.lastPaint = 0; state.raf = requestAnimationFrame(draw); } };
   new MutationObserver(kick).observe(card, { attributes: true, attributeFilter: ['class'] });
