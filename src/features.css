@@ -504,20 +504,28 @@ html[data-deck="3d"] .deck-shadow { display: block; }
 .plinth .pf-f { left: 0; top: 100%; width: 100%; height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 10px 10px; background: linear-gradient(#2a2a33, #0c0c10); }
 .plinth .pf-r { left: 100%; top: 0; width: 38px; height: 100%; transform-origin: 0 50%; transform: rotateY(90deg); background: linear-gradient(90deg, #22222b, #0a0a0e); }
 .plinth .pf-l { right: 100%; top: 0; width: 38px; height: 100%; transform-origin: 100% 50%; transform: rotateY(-90deg); background: linear-gradient(270deg, #22222b, #0a0a0e); }
-.plinth .platter { left: 50%; top: 50%; width: 252px; height: 252px; margin: -126px 0 0 -140px; border-radius: 50%; transform: translateZ(7px);
+.plinth .platter { left: 50%; top: 50%; width: 252px; height: 252px; margin: -126px 0 0 calc(-126px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(7px);
   background: radial-gradient(circle, #8d8d99 0 8%, #55555f 9% 70%, #9a9aa6 71% 74%, #2a2a31 75%); box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 6px 14px rgba(0,0,0,.6); }
 .plinth .dknob { left: 16px; bottom: 16px; width: 34px; height: 34px; border-radius: 50%; transform: translateZ(4px); background: radial-gradient(circle at 35% 30%, #e6e6ee, #6b6b78 70%); box-shadow: 0 3px 6px rgba(0,0,0,.6); }
 .plinth .dbtn { left: 62px; bottom: 22px; width: 22px; height: 22px; border-radius: 50%; transform: translateZ(3px); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 60%, #fff), var(--accent)); box-shadow: 0 0 10px var(--accent); }
 .plinth .dpitch { right: 14px; bottom: 14px; width: 12px; height: 92px; border-radius: 6px; transform: translateZ(2px); background: linear-gradient(#0b0b0f, #23232c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
 .deck-shadow { position: absolute; left: 50%; bottom: 14px; width: 270px; height: 40px; margin-left: -135px; border-radius: 50%; background: rgba(0,0,0,.55); filter: blur(16px); opacity: var(--deck, 0); pointer-events: none; }
-html[data-deck="3d"] body:not(.mini):not(.fullscreen) .vinyl-wrap { transform: translate3d(-14px, 0, 16px); animation: none; }
-html[data-deck="3d"] body:not(.mini):not(.fullscreen) .swap .vinyl-wrap { transform: translate3d(-14px, 0, 22px); }
-html[data-deck="3d"] body:not(.mini):not(.fullscreen) .armz { transform: translateZ(calc(var(--deck, 1) * 26px)); }
-html[data-deck="3d"] body:not(.mini):not(.fullscreen) .tilt { --deck: 1; }
+html[data-deck="3d"] body:not(.mini) .vinyl-wrap { transform: translate3d(var(--sx, -14px), 0, 16px); animation: none; }
+html[data-deck="3d"] body:not(.mini) .swap .vinyl-wrap { transform: translate3d(var(--sx, -14px), 0, 22px); }
+html[data-deck="3d"] body:not(.mini) .armz { transform: translateZ(calc(var(--deck, 1) * 26px)); }
+html[data-deck="3d"] body:not(.mini) .tilt { --deck: 1; }
 .deck-anim .vinyl-wrap { transition: none !important; animation: none !important; }
 html.deck-anim .glow { opacity: 0 !important; }
-.mini .plinth, .fullscreen .plinth, .mini .deck-shadow, .fullscreen .deck-shadow { display: none !important; }
-.mini .tilt, .fullscreen .tilt { transform: none !important; }
-.mini .stage, .fullscreen .stage { perspective: none !important; }
-.mini .armz, .fullscreen .armz { transform: none !important; }
-html[data-deck="3d"] body:not(.mini):not(.fullscreen) .glow { display: none; }
+body.fullscreen { --sx: 0px; } /* the full-screen record is not nudged left, so the turntable is not either */
+.mini .plinth, .mini .deck-shadow { display: none !important; }
+.mini .tilt { transform: none !important; }
+.mini .stage { perspective: none !important; }
+.mini .armz { transform: none !important; }
+.fullscreen .deck-shadow { bottom: -10px; }
+html[data-deck="3d"] body:not(.mini) .glow { display: none; }
+/* the bigger visualizer ring has to stay on the turntable */
+html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
+
+/* ================= dancing pixel people ================= */
+.dancers { position: absolute; left: 0; right: 0; bottom: 2px; width: 100%; height: 36px; image-rendering: pixelated; pointer-events: none; visibility: hidden; z-index: 3; }
+.mini .dancers, .fullscreen .dancers { display: none; }

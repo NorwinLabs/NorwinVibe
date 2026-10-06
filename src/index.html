@@ -38,7 +38,7 @@
    <div class="tilt" id="tilt">
     <div class="plinth" id="plinth"><i class="pf pf-t"></i><i class="pf pf-f"></i><i class="pf pf-r"></i><i class="pf pf-l"></i><i class="platter"></i><i class="dknob"></i><i class="dbtn"></i><i class="dpitch"></i></div>
     <div class="vinyl-wrap">
-      <canvas class="viz" id="viz" width="544" height="544"></canvas>
+      <canvas class="viz" id="viz" width="640" height="640"></canvas>
       <div class="glow"></div>
       <div class="vinyl" id="vinyl" title="Drag to scrub">
         <div class="grooves"></div>
@@ -118,6 +118,7 @@
       <div class="chips" data-pref="record">
         <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="album" title="The record takes the colour of the album cover">Album</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
       </div>
+      <button class="sw" data-pref="dancers"><span>Dancing pixel people <small>they pop up when music plays</small></span><i></i></button>
       <button class="sw" data-pref="deck3d"><span>3D record player <small>the record flips onto a turntable</small></span><i></i></button>
       <h4>Record speed</h4>
       <div class="chips" data-pref="speed">
@@ -140,6 +141,7 @@
     <div class="sp" data-tab="player">
       <h4>Playback</h4>
       <button class="sw" data-pref="lyrics"><span>Show lyrics</span><i></i></button>
+      <button class="sw" data-pref="scratchfx"><span>Record scratch sounds <small>when you drag the record</small></span><i></i></button>
       <button class="sw" data-pref="toasts"><span>Song-change notifications <small>when hidden</small></span><i></i></button>
       <h4>Sleep timer <small id="sleep-left"></small></h4>
       <div class="chips" id="sleep-chips">
@@ -249,9 +251,11 @@
   </div>
 </div>
 <script src="titles.js"></script>
+<script src="scratchfx.js"></script>
 <script src="renderer.js"></script>
 <script src="features.js"></script>
 <script src="pro.js"></script>
 <script src="extras.js"></script>
+<script src="dancers.js"></script>
 </body>
 </html>

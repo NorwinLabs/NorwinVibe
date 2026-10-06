@@ -281,7 +281,7 @@ function deckFrame(q) {
   tiltEl.style.transform = `rotateX(${(TILT_DEG * easeIO(clamp01(q / 0.95))).toFixed(2)}deg)`;
   const dk = clamp01((q - 0.12) / 0.6).toFixed(3); tiltEl.style.setProperty('--deck', dk); stageEl.style.setProperty('--deck', dk);
   const z = 16 * u + 95 * Math.sin(Math.PI * u) * (1 - 0.25 * u);
-  deckWrap.style.transform = `translate3d(-14px, 0, ${z.toFixed(1)}px) rotateX(${(360 * easeOut(u)).toFixed(1)}deg)`;
+  deckWrap.style.transform = `translate3d(var(--sx, -14px), 0, ${z.toFixed(1)}px) rotateX(${(360 * easeOut(u)).toFixed(1)}deg)`;
 }
 function animateDeck(on) {
   cancelAnimationFrame(deckRaf);
@@ -295,7 +295,7 @@ function animateDeck(on) {
   deckRaf = requestAnimationFrame(step);
 }
 function applyDeck(on) {
-  const still = deckOn === null || document.body.classList.contains('mini') || document.body.classList.contains('fullscreen') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = deckOn === null || document.body.classList.contains('mini') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (on === deckOn) return;
   deckOn = on;
   if (still) deckStatic(on); else animateDeck(on);
