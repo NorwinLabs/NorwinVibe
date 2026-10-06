@@ -41,13 +41,18 @@ function setLyrOff(v) {
   lyrOff = Math.max(-10, Math.min(10, Math.round(v * 10) / 10));
   if (curId) { const m = mapGet(OFF_KEY); if (lyrOff) m[curId] = lyrOff; else delete m[curId]; mapSet(OFF_KEY, m); }
   lyr.idx = -2; showLyrOff(); // forces the current line to be picked again
-  hud(lyrOff ? `Lyrics ${lyrOff > 0 ? 'later' : 'earlier'} by ${Math.abs(lyrOff).toFixed(1)} s` : 'Lyrics timing reset');
+  hud(lyrOff ? `Lyrics ${lyrOff > 0 ? 'sooner' : 'later'} by ${Math.abs(lyrOff).toFixed(1)} s` : 'Lyrics timing reset');
 }
 document.querySelectorAll('#lyr-chips button').forEach((b) => { b.onclick = () => setLyrOff(+b.dataset.v === 0 ? 0 : lyrOff + +b.dataset.v); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest && e.target.closest('input, select, textarea')) return;
   if (e.key === '[') setLyrOff(lyrOff - 0.5); else if (e.key === ']') setLyrOff(lyrOff + 0.5);
+  else if (e.key === ',') setLyrOff(lyrOff - 0.1); else if (e.key === '.') setLyrOff(lyrOff + 0.1);
 });
+/* one delay for every song, for speakers / headphones that play a bit late */
+function showLyrGlobal() { $('lyr-glob-n').textContent = lyrGlobal ? `${lyrGlobal > 0 ? '+' : ''}${lyrGlobal.toFixed(2).replace(/0$/, '')} s` : ''; document.querySelectorAll('#lyr-glob button').forEach((b) => b.classList.toggle('on', +b.dataset.v === lyrGlobal)); }
+document.querySelectorAll('#lyr-glob button').forEach((b) => { b.onclick = () => { lyrGlobal = +b.dataset.v; try { localStorage.setItem('nv.lyrGlobal', String(lyrGlobal)); } catch {} lyr.idx = -2; showLyrGlobal(); }; });
+showLyrGlobal();
 
 /* ---------- a look remembered for one song ---------- */
 const LOOK_KEY = 'nv.looks';

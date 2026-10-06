@@ -246,7 +246,10 @@
       pause() { if (nativeLive) bg.pause().catch(() => {}); o.setPlaying(false); },
       setPlaying(p) { if (o.paused === !p) return; pos = o.currentTime; at = performance.now(); o.paused = !p; o.fire(p ? 'play' : 'pause'); },
       sync(st) {
-        if (typeof st.pos === 'number') { pos = st.pos / 1000; at = performance.now(); }
+        if (typeof st.pos === 'number') { // blend small corrections in so the lyrics do not twitch every time the phone reports a position
+          const np = st.pos / 1000, cur2 = o.currentTime;
+          pos = !o.paused && Math.abs(np - cur2) < 0.3 ? cur2 + (np - cur2) * 0.4 : np; at = performance.now();
+        }
         if (st.dur > 0 && st.dur / 1000 !== o.duration) { o.duration = st.dur / 1000; o.fire('durationchange'); }
         if ('playing' in st) o.setPlaying(!!st.playing);
       },
@@ -543,12 +546,12 @@
     const key = `${artist}|${title}|${Math.round(dur)}`.toLowerCase(); if (lyricCache.has(key)) return lyricCache.get(key);
     const saved = lyricDisk.get(key); if (saved) { lyricCache.set(key, saved); return saved; }
     const q = new URLSearchParams({ artist_name: artist, track_name: title }); if (album) q.set('album_name', album); if (dur > 0) q.set('duration', String(Math.round(dur)));
-    let hit = await getJson(`https://lrclib.net/api/get?${q}`);
+    let hit = await getJson(`https://lrclib.net/api/get?${q}`), diff = hit && dur > 0 && hit.duration ? Math.abs(hit.duration - dur) : 0;
     if (!hit) {
       const list = await getJson(`https://lrclib.net/api/search?${new URLSearchParams({ artist_name: artist, track_name: title })}`);
-      if (Array.isArray(list)) { const close = (x) => !(dur > 0) || Math.abs((x.duration || 0) - dur) <= 4; hit = list.find((x) => x.syncedLyrics && close(x)) || list.find((x) => x.plainLyrics && close(x)) || null; }
+      const best = LRC.pickBest(list, dur); if (best) { hit = best.hit; diff = best.diff; } // closest in length (src/lrc.js)
     }
-    const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '' } : null;
+    const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '', diff } : null;
     if (lyricCache.size > 100) lyricCache.clear(); lyricCache.set(key, out); if (out) lyricDisk.put(key, out); return out;
   }
 
