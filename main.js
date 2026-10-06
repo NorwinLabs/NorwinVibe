@@ -552,7 +552,9 @@ ipcMain.on('win:fullscreen', (_e, on) => {
     normalBounds = win.getBounds();
     win.setAlwaysOnTop(true, 'screen-saver'); // so it covers the taskbar even when "always on top" is off
     win.setBounds(screen.getDisplayMatching(normalBounds).bounds);
+    win.setMovable(false); // full screen stays put: it cannot be dragged around
   } else {
+    win.setMovable(true);
     if (normalBounds) win.setBounds(normalBounds);
     win.setAlwaysOnTop(pref('pin'), 'screen-saver');
   }

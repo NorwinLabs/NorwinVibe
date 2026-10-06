@@ -526,17 +526,13 @@ html[data-deck="3d"] body:not(.mini) .glow { display: none; }
 /* the bigger visualizer ring has to stay on the turntable */
 html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
 
-/* ================= dancing pixel people ================= */
-/* the stage canvas sits behind the record player (and a little below it) so they can duck behind it */
-.dancers { position: absolute; left: 0; width: 100%; image-rendering: pixelated; pointer-events: none; visibility: hidden; }
-.dancers:not(.crowd) { top: 0; bottom: -70px; height: calc(100% + 70px); z-index: 0; }
+/* ================= dancing pixel guy ================= */
+/* back: behind the record player (he climbs out of / ducks behind it); front: over the record, under the title, bar and buttons */
+.dancers { position: absolute; width: 100%; image-rendering: pixelated; pointer-events: none; }
+.dancers.back { left: -60px; right: -60px; width: auto; top: -60px; bottom: -90px; z-index: 0; }
+.dancers.front { left: 0; top: 0; height: 100%; z-index: 1; }
 .tilt { z-index: 1; }
-.meta { position: relative; z-index: 1; }
-.dancers.crowd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; opacity: .9; }
-.fullscreen .dancers:not(.crowd), .mini .dancers { display: none; }
-body:not(.fullscreen) .dancers.crowd { display: none; }
-.fullscreen .controls, .fullscreen .progress, .fullscreen .meta { position: relative; z-index: 1; }
-
+.mini .dancers { display: none; }
 /* ================= lyrics indicator ================= */
 #btn-shuffle { position: relative; }
 .lyr-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #7b7b86; box-shadow: 0 0 0 2px rgba(12,12,18,.85); transition: background .3s, box-shadow .3s; pointer-events: auto; }
@@ -567,3 +563,6 @@ body:not(.mobile) .phone-only { display: none !important; }
 .hrow.dragging { background: rgba(255,255,255,.12); box-shadow: 0 6px 16px rgba(0,0,0,.5); border-radius: 10px; transition: none; }
 .hrow { transition: transform .15s; }
 .drag-h { cursor: grab; }
+
+/* full screen and ambient: the window covers the screen and must not be draggable */
+.fullscreen .card, .fullscreen .top { -webkit-app-region: no-drag !important; cursor: auto; }
