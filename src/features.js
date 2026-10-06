@@ -225,24 +225,16 @@ function onStateExtra(m) {
 /* ---------- lyrics ---------- */
 let lyr = { token: 0, lines: [], synced: false, idx: -1 };
 let lyrOff = 0; // seconds: this song's lyrics timing nudge (extras.js)
+let lyrGlobal = 0; try { lyrGlobal = parseFloat(localStorage.getItem('nv.lyrGlobal')) || 0; } catch {} // seconds, all songs (Bluetooth lag)
 let curDisplay = null;
 const lyricEl = $('lyric'), lyricsBox = $('lyrics');
 
-function parseLRC(text) {
-  const out = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-    if (!tags.length) continue;
-    const txt = raw.replace(/\[[^\]]*\]/g, '').trim();
-    for (const t of tags) out.push({ t: +t[1] * 60 + parseFloat(t[2]), text: txt });
-  }
-  return out.sort((a, b) => a.t - b.t);
-}
+const parseLRC = LRC.parseLRC; // (src/lrc.js, shared with the phone app and the tests)
 /* the dot beside Shuffle: green = lyrics were found and will show for this song, grey = none (or off / still searching) */
-function setLyrDot(state) {
+function setLyrDot(state, note = '') {
   const d = $('lyr-dot'); if (!d) return;
   d.className = 'lyr-dot ' + state;
-  d.title = state === 'found' ? 'Lyrics found: they will show for this song' : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
+  d.title = state === 'found' ? 'Lyrics found: they will show for this song' + note : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
 }
 function clearLyrics(msg = '') {
   setLyrDot('none');
@@ -272,14 +264,10 @@ async function loadLyrics(m, d) {
     if (l.t !== null) { n.title = 'Jump to this line'; n.onclick = () => { if (st.active && st.canSeek) seekTo(l.t); }; } // tap a line to jump there
     l.el = n; lyricsBox.appendChild(n);
   }
-  setLyrDot('found');
+  setLyrDot('found', res.diff > 2 ? ` (a different edit of the song, so the timing may be off by about ${Math.round(res.diff)} s: nudge it in Settings > Player)` : '');
 }
 
-function lineAt(pos) { // last synced line whose time <= pos (binary search)
-  const a = lyr.lines; let lo = 0, hi = a.length - 1, r = -1;
-  while (lo <= hi) { const mid = (lo + hi) >> 1; if (a[mid].t <= pos) { r = mid; lo = mid + 1; } else hi = mid - 1; }
-  return r;
-}
+const lineAt = (pos) => LRC.lineAt(lyr.lines, pos);
 /* ---------- 3D record player: the flat record flips over and lands on a turntable ---------- */
 const tiltEl = $('tilt'), stageEl = $('stage'), deckWrap = document.querySelector('.vinyl-wrap');
 const TILT_DEG = 58;
@@ -439,8 +427,11 @@ function featFrame(t, pos) {
     if (abLoop.b !== null && pos >= abLoop.b && t - abLoop.at > 700) { abLoop.at = t; seekTo(abLoop.a); }
     if (sleepSong && st.dur > 3 && pos >= st.dur - 0.7) { sleepSong = false; send('pause'); updateSleep(0); hud('Paused at the end of the song'); }
   }
-  if (!lyr.synced) return;
-  const i = lineAt(pos + 0.25 + lyrOff);
+  if (!lyr.synced) { // plain lyrics have no timing: in full screen, scroll them along with the song's progress
+    if (mode === 'full' && lyr.lines.length && st.dur > 0 && t - (lyr.scrollAt || 0) > 250) { lyr.scrollAt = t; lyricsBox.scrollTo({ top: Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight) * Math.min(1, pos / st.dur), behavior: 'smooth' }); }
+    return;
+  }
+  const i = lineAt(pos + 0.25 + lyrOff + lyrGlobal);
   if (i === lyr.idx) return;
   if (lyr.idx >= 0 && lyr.lines[lyr.idx].el) lyr.lines[lyr.idx].el.classList.remove('on');
   lyr.idx = i;

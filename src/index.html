@@ -119,8 +119,8 @@
       <div class="chips" data-pref="record">
         <button data-v="vinyl">Vinyl</button><button data-v="color">Coloured</button><button data-v="album" title="The record takes the colour of the album cover">Album</button><button data-v="cd">CD</button><button data-v="cyber" data-paid="cyberpunk">Cyber</button><button data-v="nightcity" data-paid="nightcity">Night City</button>
       </div>
-      <button class="sw" data-pref="dancers"><span>Dancing pixel people <small>they pop up when music plays</small></span><i></i></button>
-      <div class="chips" data-pref="dancerpack"><button data-v="people">People</button><button data-v="robots">Robots</button><button data-v="aliens">Aliens</button></div>
+      <button class="sw" data-pref="dancers"><span>Dancing pixel guy <small>he busts moves to the beat</small></span><i></i></button>
+      <div class="chips" data-pref="dancerpack"><button data-v="people">Guy</button><button data-v="robots">Robot</button><button data-v="aliens">Alien</button></div>
       <button class="sw" data-pref="deck3d"><span>3D record player <small>the record flips onto a turntable</small></span><i></i></button>
       <div class="chips" data-pref="deckskin"><button data-v="dark">Dark</button><button data-v="wood">Wood</button><button data-v="neon">Neon</button></div>
       <button class="sw" data-pref="deckmove"><span>Tilt with movement <small>3D player follows your mouse / phone</small></span><i></i></button>
@@ -157,8 +157,11 @@
       <div class="act-row first"><button class="act" id="loop-a">Set A</button><button class="act" id="loop-b">Set B</button><button class="act" id="loop-clear">Clear</button></div>
       <p class="hint">Repeats the part of the song between A and B (set them while it plays). Clears when the song changes.</p>
       <h4>Lyrics timing <small id="lyr-off-n"></small></h4>
-      <div class="chips" id="lyr-chips"><button data-v="-0.5">&minus;0.5 s</button><button data-v="0">Reset</button><button data-v="0.5">+0.5 s</button></div>
-      <p class="hint desk-only">Saved for this song. The [ and ] keys nudge it too.</p>
+      <div class="chips" id="lyr-chips"><button data-v="-0.5">&minus;0.5</button><button data-v="-0.1">&minus;0.1</button><button data-v="0">Reset</button><button data-v="0.1">+0.1</button><button data-v="0.5">+0.5 s</button></div>
+      <p class="hint desk-only">Saved for this song. + shows lyrics sooner, &minus; later. The [ and ] keys nudge by 0.5 s, , and . by 0.1 s.</p>
+      <h4>Lyrics delay, all songs <small id="lyr-glob-n"></small></h4>
+      <div class="chips" id="lyr-glob"><button data-v="-0.3">&minus;0.3</button><button data-v="-0.15">&minus;0.15</button><button data-v="0">None</button><button data-v="0.15">+0.15</button><button data-v="0.3">+0.3 s</button></div>
+      <p class="hint">Bluetooth speakers and headphones play a little late, so pick a minus value to make lyrics wait for the sound.</p>
       <h4>Accessibility</h4>
       <button class="sw" id="sw-calm"><span>Calm mode <small>no spinning or motion</small></span><i></i></button>
       <button class="sw" id="sw-big"><span>Larger text</span><i></i></button>
@@ -264,6 +267,7 @@
   </div>
 </div>
 <script src="titles.js"></script>
+<script src="lrc.js"></script>
 <script src="scratchfx.js"></script>
 <script src="renderer.js"></script>
 <script src="features.js"></script>

@@ -45,7 +45,7 @@ function display(m) {
   return { title: m.title, artist: m.artist, cleaned: false, sub: [m.artist, m.album].filter(Boolean).join(' · ') };
 }
 const livePos = () => {
-  const p = st.pos + (st.playing ? (performance.now() - recvAt) / 1000 : 0);
+  const p = st.pos + (st.playing ? (performance.now() - recvAt) / 1000 * (st.rate > 0 ? Math.min(4, Math.max(0.25, st.rate)) : 1) : 0); // a 1.5x video moves the song 1.5x faster
   return st.dur > 0 ? Math.min(p, st.dur) : p;
 };
 
@@ -197,6 +197,11 @@ function onState(m) {
   if (pendingPlay) {
     if (!m.active || m.playing === pendingPlay.value || performance.now() > pendingPlay.until) pendingPlay = null;
     else m = { ...m, playing: pendingPlay.value, pos: livePos() };
+  }
+  // small position corrections are blended in, so a slightly late or early report never makes the lyrics or needle jump back and forth
+  if (m.active && st.active && m.key === st.key && m.playing && st.playing && typeof m.pos === 'number') {
+    const now = livePos(), err = m.pos - now;
+    if (Math.abs(err) < 0.4) m = { ...m, pos: now + err * 0.35 };
   }
   const wasPlaying = st.playing;
   st = { ...st, ...m };

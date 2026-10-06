@@ -108,9 +108,10 @@ while ($true) {
 
             $dur = ($tl.EndTime - $tl.StartTime).TotalSeconds
             $pos = ($tl.Position - $tl.StartTime).TotalSeconds
+            $rate = 1.0; try { if ($null -ne $info.PlaybackRate -and [double]$info.PlaybackRate -gt 0) { $rate = [Math]::Min(4.0, [Math]::Max(0.25, [double]$info.PlaybackRate)) } } catch {}
             if ($playing -and $dur -gt 0) {
                 $age = ([DateTime]::UtcNow - $tl.LastUpdatedTime.UtcDateTime).TotalSeconds
-                if ($age -gt 0 -and $age -lt 3600) { $pos = [Math]::Min($dur, $pos + $age) }
+                if ($age -gt 0 -and $age -lt 3600) { $pos = [Math]::Min($dur, $pos + $age * $rate) }
             }
 
             $app = $s.SourceAppUserModelId
@@ -152,7 +153,7 @@ while ($true) {
 
             Emit @{
                 type = 'state'; active = $true; vol = [Math]::Round($vol, 3); muted = $muted; sessions = $sessions; selected = [bool]$selected; appId = $app
-                shuffle = $shuf; repeat = $rep
+                shuffle = $shuf; repeat = $rep; rate = [Math]::Round($rate, 3)
                 canShuffle = [bool]$info.Controls.IsShuffleEnabled; canRepeat = [bool]$info.Controls.IsRepeatEnabled; key = $key; app = $app
                 playing = $playing; status = $status
                 title = $p.Title; artist = $p.Artist; album = $p.AlbumTitle

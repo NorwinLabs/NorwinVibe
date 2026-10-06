@@ -8,6 +8,7 @@ const { createObsServer } = require('./lib/obs.js');
 const { DiscordRpc } = require('./lib/discord.js');
 const { createFader } = require('./lib/fade.js');
 const { createEmulator } = require('./lib/emulate.js');
+const { pickBest } = require('./src/lrc.js');
 const { cleanMeta } = require('./src/titles.js');
 const { spawn } = require('child_process');
 const readline = require('readline');
@@ -363,15 +364,12 @@ async function fetchLyrics({ artist, title, album, dur }) {
   const q = new URLSearchParams({ artist_name: artist, track_name: title });
   if (album) q.set('album_name', album);
   if (dur > 0) q.set('duration', String(Math.round(dur)));
-  let hit = await getJson(`https://lrclib.net/api/get?${q}`);
-  if (!hit) {
+  let hit = await getJson(`https://lrclib.net/api/get?${q}`), diff = hit && dur > 0 && hit.duration ? Math.abs(hit.duration - dur) : 0;
+  if (!hit) { // no exact match: take the synced version whose length is closest to the song's (a different edit drifts)
     const list = await getJson(`https://lrclib.net/api/search?${new URLSearchParams({ artist_name: artist, track_name: title })}`);
-    if (Array.isArray(list)) {
-      const close = (x) => !(dur > 0) || Math.abs((x.duration || 0) - dur) <= 4;
-      hit = list.find((x) => x.syncedLyrics && close(x)) || list.find((x) => x.plainLyrics && close(x)) || null;
-    }
+    const best = pickBest(list, dur); if (best) { hit = best.hit; diff = best.diff; }
   }
-  const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '' } : null;
+  const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '', diff } : null;
   if (lyricCache.size > 200) lyricCache.clear();
   lyricCache.set(key, out);
   if (out) lyricDiskPut(key, out); // only real hits are kept; a miss may be a dropped connection, so it is tried again next time
