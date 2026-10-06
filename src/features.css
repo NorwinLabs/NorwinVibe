@@ -529,7 +529,7 @@ html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
 /* ================= dancing pixel people ================= */
 /* the stage canvas sits behind the record player (and a little below it) so they can duck behind it */
 .dancers { position: absolute; left: 0; width: 100%; image-rendering: pixelated; pointer-events: none; visibility: hidden; }
-.dancers:not(.crowd) { top: 0; bottom: -44px; height: calc(100% + 44px); z-index: 0; }
+.dancers:not(.crowd) { top: 0; bottom: -70px; height: calc(100% + 70px); z-index: 0; }
 .tilt { z-index: 1; }
 .meta { position: relative; z-index: 1; }
 .dancers.crowd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; opacity: .9; }

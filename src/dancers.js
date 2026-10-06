@@ -1,7 +1,7 @@
-/* Little pixel dancers. When music plays they climb out from behind the record player and dance on the beat; when it stops
-   they slip back behind it. Everyone has their own style of moves (disco, wave, robot, jump, twist, macarena) and switches
-   now and then. In full screen / ambient mode a crowd lines the bottom of the screen instead.
-   Settings > Look: "Dancing pixel people" (on / off) and "Dancers" (People, Robots, Aliens). */
+/* One little pixel guy. When music plays he climbs out from behind the record player and busts a move on every beat (disco, wave,
+   robot, jump, twist, macarena: he switches style every few bars); when it stops he slips back behind it. In full screen /
+   ambient mode he dances at the bottom of the screen.
+   Settings > Look: "Dancing pixel guy" (on / off) and "Dancer" (Guy, Robot, Alien). */
 (() => {
   const stage = document.getElementById('stage'), card = document.getElementById('card'), tilt = document.getElementById('tilt');
   if (!stage || !card) return;
@@ -70,9 +70,9 @@
   function drawSprite(g, x0, y0, d, hopScale, reducedMotion, fast) {
     const body = state.colors[d.hue % 2], head = state.colors[2], det = state.colors[(d.hue + 1) % 2];
     const style = STYLES[(d.style + Math.floor(state.step / 24)) % STYLES.length]; // everyone changes their style every few bars
-    const beatNo = fast ? state.step + d.ph : Math.floor((state.step + d.ph) / 2);
+    const beatNo = state.step + d.ph; // one move per beat
     const hopBase = sprite((x, y, k) => { g.fillStyle = k === 'h' ? head : k === 'e' ? det : body; g.fillRect(x0 + x, y0 + y, 1, 1); }, pack(), style, beatNo);
-    return reducedMotion ? 0 : Math.min(4, Math.round(hopBase * hopScale));
+    return reducedMotion ? 0 : Math.min(5, Math.round(hopBase * hopScale));
   }
 
   // where the record player is, in stage pixels, so dancers can slip in behind it
@@ -81,16 +81,16 @@
     const sr = stage.getBoundingClientRect(), wrap = document.querySelector('.vinyl-wrap').getBoundingClientRect(), k = sr.width / (stage.offsetWidth || 1) || 1;
     let bottom = wrap.bottom; const pl = document.querySelector('.plinth .pf-f');
     if (pl && document.documentElement.dataset.deck === '3d') { const pr = pl.getBoundingClientRect(); if (pr.height) bottom = Math.max(bottom, pr.bottom + 4); } // the turntable's front edge, depth included
-    state.geo = { w: stage.offsetWidth, h: stage.offsetHeight, cx: (wrap.left + wrap.width / 2 - sr.left) / k, cy: (wrap.top + wrap.height / 2 - sr.top) / k, floor: (bottom - sr.top) / k + 26 };
+    state.geo = { w: stage.offsetWidth, h: stage.offsetHeight, cx: (wrap.left + wrap.width / 2 - sr.left) / k, cy: (wrap.top + wrap.height / 2 - sr.top) / k, floor: (bottom - sr.top) / k + 52 };
     state.geoAt = t; return state.geo;
   }
 
-  const SC = 3, EXTRA = 44;
+  const SC = 5, EXTRA = 70;
   function paintStage(want, t, dt, energy, rm) {
     const geo = geometry(t), w = Math.max(40, Math.round(geo.w / SC)), h = Math.round((geo.h + EXTRA) / SC);
     if (cvStage.width !== w) cvStage.width = w; if (cvStage.height !== h) cvStage.height = h;
     const g = cvStage.getContext('2d'); g.clearRect(0, 0, w, h);
-    const list = crowd(cvStage, 5), fast = bpm() > 125 || energy > 0.55;
+    const list = crowd(cvStage, 1), fast = bpm() > 125 || energy > 0.55;
     const floor = Math.min(h - 3, geo.floor / SC), hideX = geo.cx / SC, hideY = geo.cy / SC - 4; // hidden = tucked behind the middle of the record player
     let up = false;
     for (const d of list) {
@@ -116,11 +116,11 @@
     return up;
   }
   function paintCrowd(want, t, dt, energy, rm) {
-    const sc = 5, w = Math.max(60, Math.round(window.innerWidth / sc)), h = 12;
+    const sc = 8, w = Math.max(60, Math.round(window.innerWidth / sc)), h = 12;
     if (cvCrowd.width !== w) cvCrowd.width = w; if (cvCrowd.height !== h) cvCrowd.height = h;
     cvCrowd.style.height = `${h * sc}px`;
     const g = cvCrowd.getContext('2d'); g.clearRect(0, 0, w, h);
-    const n = Math.max(7, Math.min(21, Math.round(window.innerWidth / 110))), list = crowd(cvCrowd, n), fast = bpm() > 125 || energy > 0.55;
+    const list = crowd(cvCrowd, 1), fast = bpm() > 125 || energy > 0.55;
     let up = false;
     for (const d of list) {
       if (want && !d.on) { d.on = true; d.t0 = t + d.delay; } else if (!want) d.on = false;

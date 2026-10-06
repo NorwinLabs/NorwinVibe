@@ -207,7 +207,7 @@ const TOUR = document.body.classList.contains('mobile') ? [
 /* what's new: shown once to people who already took the first-run tour (and after it for new people) */
 const TOUR_NEW = [
   ['3D record player', 'Settings > Look > 3D record player flips the record onto a turntable. Works in full screen and ambient mode too.'],
-  ['Scratch it', 'Drag the record back and forth to scrub, and it scratches like a real one. Pixel dancers pop up when the music plays (Settings > Look).'],
+  ['Scratch it', 'Drag the record back and forth to scrub, and it scratches like a real one. A pixel guy busts moves to the beat (Settings > Look).'],
   ['Bigger visualizer', 'The ring reacts harder now. Tap any synced lyric line to jump to it.'],
 ];
 const TOUR_VER = '2';
