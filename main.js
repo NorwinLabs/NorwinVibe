@@ -20,7 +20,7 @@ app.setAppUserModelId(APP_ID);
 const SIZES = { full: { w: 360, h: 560 }, mini: { w: 450, h: 176 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
-  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, deck3d: false, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
 const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
 const ENUMS = {
   bgart: ['cover', 'soft', 'off'],
@@ -38,7 +38,7 @@ const PAID = {
 };
 const PUBLIC_KEY = (() => { try { return fs.readFileSync(path.join(__dirname, 'licensing', 'public.pem')); } catch { return null; } })();
 const storeCfg = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { return { items: {} }; } };
-const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle'];
+const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle', 'deck3d'];
 const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'screensaver', 'ssMin', 'obs', 'discord', 'smartshuffle']); // only settable with a Pro license
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
