@@ -527,27 +527,15 @@ html[data-deck="3d"] body:not(.mini) .glow { display: none; }
 html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
 
 /* ================= dancing pixel people ================= */
-.dancers { position: absolute; left: 0; right: 0; bottom: 2px; width: 100%; height: 36px; image-rendering: pixelated; pointer-events: none; visibility: hidden; z-index: 3; }
-.mobile .dancers { bottom: -30px; }
+/* the stage canvas sits behind the record player (and a little below it) so they can duck behind it */
+.dancers { position: absolute; left: 0; width: 100%; image-rendering: pixelated; pointer-events: none; visibility: hidden; }
+.dancers:not(.crowd) { top: 0; bottom: -44px; height: calc(100% + 44px); z-index: 0; }
+.tilt { z-index: 1; }
+.meta { position: relative; z-index: 1; }
 .dancers.crowd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; opacity: .9; }
-.dancers:not(.crowd) { display: block; }
 .fullscreen .dancers:not(.crowd), .mini .dancers { display: none; }
 body:not(.fullscreen) .dancers.crowd { display: none; }
 .fullscreen .controls, .fullscreen .progress, .fullscreen .meta { position: relative; z-index: 1; }
-
-.ln:not(.plain) { cursor: pointer; -webkit-app-region: no-drag; }
-.ln:not(.plain):hover { opacity: .75; }
-
-/* turntable skins and the dust cover */
-.plinth .pf-lid { left: 0; top: 0; width: 100%; height: 100%; border-radius: 12px; transform-origin: 50% 0; transform: translateZ(44px) rotateX(0deg); transition: transform 1.2s var(--ease);
-  background: linear-gradient(160deg, rgba(190,210,235,.16), rgba(120,140,170,.07)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 0 14px rgba(180,200,235,.15); pointer-events: none; }
-.playing .plinth .pf-lid { transform: translateZ(44px) rotateX(104deg); } /* the lid swings up and back when the music starts */
-html[data-deckskin="wood"] .plinth .pf-t { background: repeating-linear-gradient(90deg, rgba(0,0,0,.09) 0 2px, transparent 2px 9px), linear-gradient(160deg, #a4713f, #6e4524 60%, #4b2d15); box-shadow: inset 0 0 0 1px rgba(255,220,170,.25), inset 0 0 26px rgba(40,18,4,.5); }
-html[data-deckskin="wood"] .plinth .pf-f, html[data-deckskin="wood"] .plinth .pf-r, html[data-deckskin="wood"] .plinth .pf-l { background: linear-gradient(#7a4d28, #321c0c); }
-html[data-deckskin="wood"] .plinth .platter { background: radial-gradient(circle, #cfcfd8 0 8%, #8a8a95 9% 70%, #d6d6de 71% 74%, #3a3a42 75%); }
-html[data-deckskin="neon"] .plinth .pf-t { background: linear-gradient(160deg, #1a1030, #0a0714); box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 24px var(--accent); }
-html[data-deckskin="neon"] .plinth .pf-f, html[data-deckskin="neon"] .plinth .pf-r, html[data-deckskin="neon"] .plinth .pf-l { background: linear-gradient(color-mix(in srgb, var(--accent) 55%, #000), #05030a); box-shadow: 0 0 12px var(--accent); }
-html[data-deckskin="neon"] .plinth .platter { background: radial-gradient(circle, #fff 0 8%, #2a1a4a 9% 70%, var(--accent-2) 71% 74%, #120a22 75%); box-shadow: 0 0 16px var(--accent-2); }
 
 /* ================= lyrics indicator ================= */
 #btn-shuffle { position: relative; }
