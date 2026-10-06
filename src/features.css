@@ -548,3 +548,34 @@ html[data-deckskin="wood"] .plinth .platter { background: radial-gradient(circle
 html[data-deckskin="neon"] .plinth .pf-t { background: linear-gradient(160deg, #1a1030, #0a0714); box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 24px var(--accent); }
 html[data-deckskin="neon"] .plinth .pf-f, html[data-deckskin="neon"] .plinth .pf-r, html[data-deckskin="neon"] .plinth .pf-l { background: linear-gradient(color-mix(in srgb, var(--accent) 55%, #000), #05030a); box-shadow: 0 0 12px var(--accent); }
 html[data-deckskin="neon"] .plinth .platter { background: radial-gradient(circle, #fff 0 8%, #2a1a4a 9% 70%, var(--accent-2) 71% 74%, #120a22 75%); box-shadow: 0 0 16px var(--accent-2); }
+
+/* ================= lyrics indicator ================= */
+#btn-shuffle { position: relative; }
+.lyr-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #7b7b86; box-shadow: 0 0 0 2px rgba(12,12,18,.85); transition: background .3s, box-shadow .3s; pointer-events: auto; }
+.lyr-dot.found { background: #3ddc84; box-shadow: 0 0 0 2px rgba(12,12,18,.85), 0 0 8px #3ddc84; }
+.lyr-dot.busy { animation: lyrbusy 1s ease-in-out infinite; }
+@keyframes lyrbusy { 50% { opacity: .35; } }
+.mini .lyr-dot { display: none; }
+
+/* ================= 3D needle + axle (3D record player only) ================= */
+.plinth .axle { display: block; position: absolute; left: 50%; top: 50%; pointer-events: none; }
+.plinth .ax-base { width: 20px; height: 20px; margin: -10px 0 0 calc(-10px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(8px); background: radial-gradient(circle at 35% 30%, #f2f2f8, #7d7d8a 70%); box-shadow: 0 2px 4px rgba(0,0,0,.6); }
+.plinth .ax-a, .plinth .ax-b { width: 8px; height: 24px; margin: -24px 0 0 calc(-4px + var(--sx, -14px)); transform-origin: 50% 100%; background: linear-gradient(90deg, #8d8d99, #f4f4fa 45%, #6e6e7b); }
+.plinth .ax-a { transform: translateZ(8px) rotateX(-90deg); }
+.plinth .ax-b { transform: translateZ(8px) rotateZ(90deg) rotateX(-90deg); }
+.plinth .ax-cap { width: 10px; height: 10px; margin: -5px 0 0 calc(-5px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(32px); background: radial-gradient(circle at 35% 30%, #ffffff, #9a9aa6 75%); box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+html[data-deck="3d"] body:not(.mini) .arm { transform-style: preserve-3d; filter: none; }
+/* a pillar under the pivot, a tube-like arm raised above the deck, and a head that drops into the groove when the song plays */
+html[data-deck="3d"] body:not(.mini) .arm-base { transform-style: preserve-3d; transform: translateZ(4px); }
+html[data-deck="3d"] body:not(.mini) .arm-base::before, html[data-deck="3d"] body:not(.mini) .arm-base::after { content: ""; position: absolute; left: 4px; top: 50%; width: 24px; height: 24px; margin-top: -24px; border-radius: 0; transform-origin: 50% 100%; background: linear-gradient(90deg, #6d6d7a, #e8e8f0 45%, #55555f); box-shadow: none; }
+html[data-deck="3d"] body:not(.mini) .arm-base::before { transform: translateZ(4px) rotateX(-90deg) translateY(24px); }
+html[data-deck="3d"] body:not(.mini) .arm-base::after { transform: translateZ(4px) rotateZ(90deg) rotateX(-90deg) translateY(24px); }
+html[data-deck="3d"] body:not(.mini) .arm-rod { transform-style: preserve-3d; transform: translateZ(26px); box-shadow: 0 5px 6px rgba(0,0,0,.35); }
+html[data-deck="3d"] body:not(.mini) .arm-rod::after { content: ""; position: absolute; inset: 0; background: inherit; border-radius: inherit; transform: rotateY(90deg); }
+html[data-deck="3d"] body:not(.mini) .arm-head { transform-style: preserve-3d; transform: translateZ(calc(20px + var(--lift, 0) * 10px)) rotate(-8deg); }
+
+body:not(.mobile) .phone-only { display: none !important; }
+
+.hrow.dragging { background: rgba(255,255,255,.12); box-shadow: 0 6px 16px rgba(0,0,0,.5); border-radius: 10px; transition: none; }
+.hrow { transition: transform .15s; }
+.drag-h { cursor: grab; }

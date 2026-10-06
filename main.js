@@ -527,7 +527,7 @@ ipcMain.on('screensaver:state', (_e, on) => {
   if (!ssActive && ssHidden) { ssHidden = false; if (win) win.hide(); }
 });
 ipcMain.on('dev:screensaver', () => { if (devActive) toRenderer('screensaver:request'); });
-ipcMain.on('sleep:set', (_e, mins) => setSleep([0, 15, 30, 60].includes(mins) ? mins : 0));
+ipcMain.on('sleep:set', (_e, mins) => setSleep([0, 5, 10, 15, 30, 45, 60, 90, 120].includes(mins) ? mins : 0));
 ipcMain.on('win:close', () => app.quit());
 ipcMain.on('win:minimizeWindow', () => { if (win && !win.isDestroyed()) win.minimize(); }); // the top-bar button: a normal minimise to the taskbar
 ipcMain.on('win:minimize', () => win.hide()); // lives in the tray; click the tray icon to bring it back

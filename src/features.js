@@ -200,16 +200,19 @@ el.card.addEventListener('wheel', (e) => {
 }, { passive: true });
 
 /* ---------- sleep timer ---------- */
-let sleepEnds = 0;
+let sleepEnds = 0, sleepSong = false; // sleepSong: pause when the current song finishes
 document.querySelectorAll('#sleep-chips button').forEach((b) => {
-  b.onclick = () => { const m = +b.dataset.v; sleepEnds = m ? Date.now() + m * 60000 : 0; bridge.sleep(m); updateSleep(m); hud(m ? `Pausing in ${m} min` : 'Sleep timer off'); };
+  b.onclick = () => {
+    if (b.dataset.v === 'song') { sleepSong = true; sleepEnds = 0; bridge.sleep(0); updateSleep('song'); hud('Pausing when this song ends'); return; }
+    const m = +b.dataset.v; sleepSong = false; sleepEnds = m ? Date.now() + m * 60000 : 0; bridge.sleep(m); updateSleep(m); hud(m ? `Pausing in ${m} min` : 'Sleep timer off');
+  };
 });
 bridge.onSleep((t) => { sleepEnds = t; updateSleep(); });
 function updateSleep(chosen) {
   const left = sleepEnds - Date.now();
   $('sleep-left').textContent = left > 0 ? `${Math.ceil(left / 60000)} min left` : '';
-  const sel = chosen !== undefined ? chosen : left > 0 ? [15, 30, 60].find((m) => left <= m * 60000 + 1000) : 0;
-  document.querySelectorAll('#sleep-chips button').forEach((b) => b.classList.toggle('on', +b.dataset.v === (sel || 0)));
+  const sel = sleepSong ? 'song' : chosen !== undefined ? chosen : left > 0 ? [5, 10, 15, 30, 45, 60, 90, 120].find((m) => left <= m * 60000 + 1000) : 0;
+  document.querySelectorAll('#sleep-chips button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(sel || 0)));
 }
 setInterval(updateSleep, 5000); updateSleep(0);
 
@@ -235,7 +238,14 @@ function parseLRC(text) {
   }
   return out.sort((a, b) => a.t - b.t);
 }
+/* the dot beside Shuffle: green = lyrics were found and will show for this song, grey = none (or off / still searching) */
+function setLyrDot(state) {
+  const d = $('lyr-dot'); if (!d) return;
+  d.className = 'lyr-dot ' + state;
+  d.title = state === 'found' ? 'Lyrics found: they will show for this song' : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
+}
 function clearLyrics(msg = '') {
+  setLyrDot('none');
   lyr = { token: lyr.token + 1, lines: [], synced: false, idx: -1 };
   lyricEl.textContent = ''; lyricsBox.textContent = '';
   if (msg) { const n = document.createElement('div'); n.className = 'none'; n.textContent = msg; lyricsBox.appendChild(n); }
@@ -244,7 +254,7 @@ async function loadLyrics(m, d) {
   clearLyrics();
   if (!P.lyrics || !m.active || !d || !d.title || !d.artist || m.dur > 900) { if (m.active && m.dur > 900) clearLyrics('Lyrics are skipped for long videos'); return; }
   const token = lyr.token;
-  clearLyrics('Searching for lyrics…'); lyr.token = token + 1;
+  clearLyrics('Searching for lyrics…'); lyr.token = token + 1; setLyrDot('busy');
   const mine = lyr.token;
   const title = d.title.replace(/\s*[-–]\s*(remaster(ed)?|\d{4}\s+remaster|live|single version|radio edit).*$/i, '').trim();
   let res = null;
@@ -262,6 +272,7 @@ async function loadLyrics(m, d) {
     if (l.t !== null) { n.title = 'Jump to this line'; n.onclick = () => { if (st.active && st.canSeek) seekTo(l.t); }; } // tap a line to jump there
     l.el = n; lyricsBox.appendChild(n);
   }
+  setLyrDot('found');
 }
 
 function lineAt(pos) { // last synced line whose time <= pos (binary search)
@@ -413,8 +424,21 @@ const endNeedle = () => {
 armEl.addEventListener('pointerup', endNeedle);
 armEl.addEventListener('pointercancel', endNeedle);
 
+/* ---------- A-B loop: repeat a section of the song ---------- */
+const abLoop = { a: null, b: null, at: 0 };
+function loopUi() {
+  $('loop-n').textContent = abLoop.a === null ? '' : abLoop.b === null ? `A ${fmt(abLoop.a)}` : `${fmt(abLoop.a)} \u2192 ${fmt(abLoop.b)}`;
+  if (bridge.setLoop) bridge.setLoop(abLoop.a, abLoop.b); // the phone's native player loops precisely on its own
+}
+$('loop-a').onclick = () => { if (!st.active) return; abLoop.a = livePos(); if (abLoop.b !== null && abLoop.b <= abLoop.a) abLoop.b = null; loopUi(); hud('Loop start set'); };
+$('loop-b').onclick = () => { if (!st.active || abLoop.a === null) { hud('Set A first'); return; } const b = livePos(); if (b <= abLoop.a + 0.5) { hud('B must be after A'); return; } abLoop.b = b; loopUi(); hud('Looping A to B'); };
+$('loop-clear').onclick = () => { abLoop.a = abLoop.b = null; loopUi(); hud('Loop cleared'); };
 function featFrame(t, pos) {
   updateArm(t, pos);
+  if (st.active && st.playing) {
+    if (abLoop.b !== null && pos >= abLoop.b && t - abLoop.at > 700) { abLoop.at = t; seekTo(abLoop.a); }
+    if (sleepSong && st.dur > 3 && pos >= st.dur - 0.7) { sleepSong = false; send('pause'); updateSleep(0); hud('Paused at the end of the song'); }
+  }
   if (!lyr.synced) return;
   const i = lineAt(pos + 0.25 + lyrOff);
   if (i === lyr.idx) return;
@@ -490,6 +514,7 @@ function saveEntry(entry) { // newest first, de-duplicated, capped
   list.unshift(entry); store.set('nv.history', list.slice(0, 60));
 }
 function onTrackChange(m, d) {
+  if (abLoop.a !== null) { abLoop.a = abLoop.b = null; loopUi(); } // a new song: no loop
   renderIdle(m.active); if (!m.active) setTimeout(idleDecor, 0);
   curDisplay = m.active ? d : null;
   curEntry = null; curId = '';

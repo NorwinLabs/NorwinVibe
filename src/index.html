@@ -36,7 +36,7 @@
   <section class="stage" id="stage">
    <div class="deck-shadow"></div>
    <div class="tilt" id="tilt">
-    <div class="plinth" id="plinth"><i class="pf pf-t"></i><i class="pf pf-f"></i><i class="pf pf-r"></i><i class="pf pf-l"></i><i class="pf pf-lid"></i><i class="platter"></i><i class="dknob"></i><i class="dbtn"></i><i class="dpitch"></i></div>
+    <div class="plinth" id="plinth"><i class="pf pf-t"></i><i class="pf pf-f"></i><i class="pf pf-r"></i><i class="pf pf-l"></i><i class="pf pf-lid"></i><i class="platter"></i><i class="axle ax-base"></i><i class="axle ax-a"></i><i class="axle ax-b"></i><i class="axle ax-cap"></i><i class="dknob"></i><i class="dbtn"></i><i class="dpitch"></i></div>
     <div class="vinyl-wrap">
       <canvas class="viz" id="viz" width="640" height="640"></canvas>
       <div class="glow"></div>
@@ -72,6 +72,7 @@
 
   <section class="controls">
     <button class="ctl tiny" id="btn-shuffle" title="Shuffle" aria-label="Shuffle">
+      <i class="lyr-dot" id="lyr-dot" title="No lyrics for this song"></i>
       <svg viewBox="0 0 24 24"><path d="M3 6h3c5 0 7 12 12 12h3M18 15l3 3-3 3M3 18h3c1.5 0 2.7-.8 3.7-2M14.3 8C15.3 6.8 16.5 6 18 6h3M18 3l3 3-3 3"/></svg>
     </button>
     <button class="ctl" id="btn-prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5v14l-10-7z" class="solid"/></svg></button>
@@ -144,12 +145,17 @@
     <div class="sp" data-tab="player">
       <h4>Playback</h4>
       <button class="sw" data-pref="lyrics"><span>Show lyrics</span><i></i></button>
+      <button class="sw phone-only" data-pref="replaygain"><span>Even out song volume <small>uses ReplayGain tags</small></span><i></i></button>
+      <button class="sw phone-only" data-pref="recordstop"><span>Record-stop effect <small>slows down on pause, spins up on play</small></span><i></i></button>
       <button class="sw" data-pref="scratchfx"><span>Record scratch sounds <small>when you drag the record</small></span><i></i></button>
       <button class="sw" data-pref="toasts"><span>Song-change notifications <small>when hidden</small></span><i></i></button>
       <h4>Sleep timer <small id="sleep-left"></small></h4>
       <div class="chips" id="sleep-chips">
-        <button data-v="0">Off</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button>
+        <button data-v="0">Off</button><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button><button data-v="90">90</button><button data-v="120">120 min</button><button data-v="song" title="Pause when the current song finishes">End of song</button>
       </div>
+      <h4>Loop a section <small id="loop-n"></small></h4>
+      <div class="act-row first"><button class="act" id="loop-a">Set A</button><button class="act" id="loop-b">Set B</button><button class="act" id="loop-clear">Clear</button></div>
+      <p class="hint">Repeats the part of the song between A and B (set them while it plays). Clears when the song changes.</p>
       <h4>Lyrics timing <small id="lyr-off-n"></small></h4>
       <div class="chips" id="lyr-chips"><button data-v="-0.5">&minus;0.5 s</button><button data-v="0">Reset</button><button data-v="0.5">+0.5 s</button></div>
       <p class="hint desk-only">Saved for this song. The [ and ] keys nudge it too.</p>
