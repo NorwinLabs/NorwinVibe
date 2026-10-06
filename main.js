@@ -468,8 +468,14 @@ ipcMain.handle('store:info', () => {
   const c = storeCfg();
   return {
     owned: entitlementList(),
+    restore: /^https:\/\//.test(storeCfg().restoreUrl || ''),
     items: Object.fromEntries(STORE_IDS.map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])),
   };
+});
+ipcMain.handle('store:restore', async (_e, email) => { // asks YOUR license service to email the buyer's keys again
+  const url = storeCfg().restoreUrl;
+  if (!/^https:\/\//.test(url || '') || typeof email !== 'string' || !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(email)) return { ok: false, error: 'Restore is not set up yet.' };
+  try { const r = await net.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); return { ok: r.ok }; } catch { return { ok: false, error: 'No connection.' }; }
 });
 ipcMain.handle('store:buy', async (_e, id) => { // opens YOUR checkout page (e.g. a Stripe Payment Link) in the browser
   const url = storeCfg().items?.[id]?.checkoutUrl;

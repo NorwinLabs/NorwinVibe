@@ -94,6 +94,7 @@ const storeMsg = (t) => { $('store-msg').textContent = t || ''; };
 async function renderStore(focus) {
   try { storeInfo = await bridge.storeInfo(); } catch {}
   P.owned = storeInfo.owned; showPrefs();
+  $('restore-box').style.display = storeInfo.restore ? '' : 'none'; // only when a restore service is set up (store.config.json restoreUrl)
   const box = $('store-items'); box.textContent = '';
   for (const [id, it] of Object.entries(storeInfo.items)) {
     const ui = STORE_UI[id] || { blurb: '', parts: [], apply: {} };
@@ -129,6 +130,12 @@ $('key-redeem').onclick = async () => {
   const key = $('key-in').value.trim(); if (!key) return;
   const r = await bridge.storeRedeem(key);
   if (r.ok) { $('key-in').value = ''; storeMsg('Unlocked! Thank you.'); hud('Unlocked'); renderStore(r.item); } else storeMsg(r.error);
+};
+$('mail-send').onclick = async () => {
+  const email = $('mail-in').value.trim(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { storeMsg('Enter the email you bought with.'); return; }
+  storeMsg('Sending…');
+  const r = await bridge.storeRestore(email);
+  storeMsg(r && r.ok ? 'If that email has a purchase, your keys are on their way.' : ((r && r.error) || 'Could not send right now. Try again later.'));
 };
 bridge.onOwned((list) => {
   P.owned = list;

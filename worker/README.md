@@ -23,7 +23,7 @@ keys, so nothing in the app changes except the checkout links.
 5. **Stripe webhook**: Developers > Webhooks > add `https://<your-worker>.workers.dev/stripe-webhook` for
    `checkout.session.completed` and `checkout.session.async_payment_succeeded`, then
    `npx wrangler secret put STRIPE_WEBHOOK_SECRET` with its `whsec_...`.
-6. **App**: put each Payment Link URL in `store.config.json` (`checkoutUrl`) and ship a new build.
+6. **App**: put each Payment Link URL in `store.config.json` (`checkoutUrl`), and `https://<your-worker>.workers.dev/restore` as `restoreUrl` (this shows "Lost your key? Email my keys" in the Theme Store), then ship a new build.
 
 Pro includes every theme pack. Check it end to end in Stripe test mode first (card 4242 4242 4242 4242).
-`npm test` checks the signing and webhook-signature code locally.
+`npm test` checks signing, the Stripe signature check, a full purchase (key stored + emailed, retries harmless) and the restore flow, all locally with fakes.

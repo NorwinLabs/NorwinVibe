@@ -44,6 +44,34 @@ async function sendEmail(env, to, item, key) {
   if (!r.ok) throw new Error(`email failed: ${r.status} ${await r.text()}`);
 }
 
+async function addEmailKey(env, email, item, key) {
+  const k = `email:${email.trim().toLowerCase()}`, list = JSON.parse((await env.KEYS.get(k)) || '[]');
+  if (!list.some((x) => x.key === key)) list.push({ item, key });
+  await env.KEYS.put(k, JSON.stringify(list));
+}
+
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+// "Lost your key?": always answers ok (so nobody can probe which emails bought), at most one email per address per minute
+async function restore(request, env) {
+  let email = '';
+  try { email = String((await request.json()).email || '').trim().toLowerCase(); } catch { /* not JSON */ }
+  const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+  if (!/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(email)) return json({ ok: false }, 400);
+  if (await env.KEYS.get(`rl:${email}`)) return json({ ok: true });
+  await env.KEYS.put(`rl:${email}`, '1', { expirationTtl: 60 });
+  const list = JSON.parse((await env.KEYS.get(`email:${email}`)) || '[]');
+  if (list.length) await sendKeysEmail(env, email, list);
+  return json({ ok: true });
+}
+async function sendKeysEmail(env, to, list) {
+  const body = list.map((x) => `${NAMES[x.item] || x.item}:\n${x.key}`).join('\n\n');
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.FROM_EMAIL, to: [to], subject: 'Your NorwinVibe license keys', text: `Here are your license keys again.\n\n${body}\n\nOpen NorwinVibe > Settings > Theme Store > Redeem and paste one.\n` }),
+  });
+  if (!r.ok) throw new Error(`email failed: ${r.status}`);
+}
+
 async function webhook(request, env) {
   const body = await request.text();
   if (!(await verifyStripe(body, request.headers.get('Stripe-Signature'), env.STRIPE_WEBHOOK_SECRET))) return new Response('bad signature', { status: 400 });
@@ -57,6 +85,7 @@ async function webhook(request, env) {
   const key = await signLicense(env.LICENSE_PRIVATE_KEY, item, s.id);
   await env.KEYS.put(`order:${s.id}`, JSON.stringify({ item, key }));
   const to = s.customer_details && s.customer_details.email;
+  if (to) await addEmailKey(env, to, item, key); // remembered by email so "Lost your key?" can send it again
   if (to) await sendEmail(env, to, item, key); // a thrown error returns 500 so Stripe retries; the key is already stored
   return new Response('ok');
 }
@@ -70,10 +99,13 @@ async function thanks(url, env) {
   return page(`<h2>Thanks for buying ${esc(NAMES[o.item])}!</h2><p>Your license key (a copy is on its way by email):</p><textarea readonly rows=5 style="width:100%;font:13px monospace" onclick="this.select()">${esc(o.key)}</textarea><p>Open NorwinVibe &rsaquo; Settings &rsaquo; Theme Store &rsaquo; Redeem and paste it.</p>`);
 }
 
+export { webhook, restore };
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (request.method === 'POST' && url.pathname === '/stripe-webhook') return webhook(request, env);
+    if (request.method === 'POST' && url.pathname === '/restore') return restore(request, env);
     if (request.method === 'GET' && url.pathname === '/thanks') return thanks(url, env);
     return new Response('Not found', { status: 404 });
   },

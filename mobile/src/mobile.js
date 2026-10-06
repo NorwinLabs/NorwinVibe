@@ -629,12 +629,16 @@
     close: () => {}, minimize: () => {}, pin: () => {}, mini: () => {}, fullscreen: () => {},
     storeInfo: async () => {
       const c = storeCfg();
-      return { owned: entitlementList(), items: Object.fromEntries(['pro', ...PACK_IDS].map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])) };
+      return { owned: entitlementList(), restore: /^https:\/\//.test(c.restoreUrl || ''), items: Object.fromEntries(['pro', ...PACK_IDS].map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])) };
     },
     storeBuy: async (id) => {
       const url = storeCfg().items?.[id]?.checkoutUrl;
       if (!['pro', ...PACK_IDS].includes(id) || !/^https:\/\//.test(url || '')) return { ok: false, error: 'Checkout is not set up yet.' };
       window.open(url, '_blank'); return { ok: true };
+    },
+    storeRestore: async (email) => {
+      const url = storeCfg().restoreUrl; if (!/^https:\/\//.test(url || '')) return { ok: false, error: 'Restore is not set up yet.' };
+      try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); return { ok: r.ok }; } catch { return { ok: false, error: 'No connection.' }; }
     },
     storeRedeem: async (key) => {
       const o = verifyLicense(key); if (!o) return { ok: false, error: 'That license key is not valid or has expired.' };
