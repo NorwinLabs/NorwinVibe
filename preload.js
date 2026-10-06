@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   storeInfo: () => ipcRenderer.invoke('store:info'),
   storeBuy: (id) => ipcRenderer.invoke('store:buy', id),
   storeRedeem: (key) => ipcRenderer.invoke('store:redeem', key),
+  storeRestore: (email) => ipcRenderer.invoke('store:restore', email),
   dev: {
     info: () => ipcRenderer.invoke('dev:info'), devtools: () => ipcRenderer.send('dev:devtools'), asFree: (on) => ipcRenderer.send('dev:asfree', on),
     fakeUpdate: () => ipcRenderer.send('dev:fakeupdate'), screensaver: () => ipcRenderer.send('dev:screensaver'), signOut: () => ipcRenderer.send('dev:signout'),

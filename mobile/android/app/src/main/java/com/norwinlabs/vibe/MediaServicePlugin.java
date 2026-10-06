@@ -96,7 +96,7 @@ public class MediaServicePlugin extends Plugin {
         float[] g = new float[5];
         try { com.getcapacitor.JSArray a = call.getArray("gains"); for (int i = 0; i < 5 && a != null && i < a.length(); i++) g[i] = (float) a.getDouble(i); } catch (Exception ignored) { }
         Integer xf = call.getInt("xfade", 0);
-        NativePlayer.setFx(pro, eq, g, xf == null ? 0 : xf);
+        NativePlayer.setFx(pro, eq, g, xf == null ? 0 : xf, !Boolean.FALSE.equals(call.getBoolean("rg", true)), !Boolean.FALSE.equals(call.getBoolean("slow", true)));
     }
 
     @PluginMethod
@@ -152,6 +152,12 @@ public class MediaServicePlugin extends Plugin {
         final float v = call.getFloat("volume", 1f) == null ? 1f : call.getFloat("volume", 1f);
         final boolean m = Boolean.TRUE.equals(call.getBoolean("muted", false));
         NativePlayer.post(() -> { NativePlayer.setVolume(v, m); call.resolve(); });
+    }
+
+    @PluginMethod
+    public void setLoop(PluginCall call) {
+        final long a = call.getLong("a", 0L) == null ? 0 : call.getLong("a", 0L), b = call.getLong("b", 0L) == null ? 0 : call.getLong("b", 0L);
+        NativePlayer.post(() -> { NativePlayer.setLoop(a, b); call.resolve(); });
     }
 
     @PluginMethod

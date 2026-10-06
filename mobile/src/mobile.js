@@ -15,7 +15,7 @@
   const toast = (t) => { if (typeof hud === 'function') hud(t); };
 
   /* ================= preferences & store (mirrors main.js) ================= */
-  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', deck3d: false, dancers: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
+  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
   const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
   const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'smartshuffle']); // only settable with a Pro license (desktop-only Pro switches are not offered here)
   const ENUMS = {
@@ -24,6 +24,8 @@
     speed: ['slow', 'relaxed', '33', '45'],
     theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
     record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
+    dancerpack: ['people', 'robots', 'aliens'],
+    deckskin: ['dark', 'wood', 'neon'],
     needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
     viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
   };
@@ -138,6 +140,27 @@
     sortLib(); toast(added ? `Added ${added} song${added === 1 ? '' : 's'}` : 'Those songs are already in your library');
     renderLibrary(); if (order.length === 0 || added) buildOrder(cur && cur.id);
   }
+  /* Songs added before the native player existed live only inside the app's database, which the native player cannot open.
+     Copy them into the app's own storage one at a time in the background (the database copy is dropped once the file is safe). */
+  let migrating = false;
+  async function migrateBlobs() {
+    if (migrating || !nativeOK() || !bg.storeFile) return; migrating = true;
+    try {
+      await libReady;
+      for (const t of lib.filter((x) => !x.path)) {
+        const rec = await dbDo('blobs', 'readonly', (s) => s.get(t.id)).catch(() => null);
+        if (!rec || !rec.blob) continue;
+        try {
+          const path = await storeNative(t.id, rec.blob);
+          t.path = path; t.own = true;
+          await dbMulti(['meta', 'blobs'], (m, b) => { m.put(t); b.delete(t.id); });
+        } catch { /* leave it as it was; it still plays in the web player */ }
+        await new Promise((r) => setTimeout(r, 400)); // never hog the phone
+      }
+      orderVer++;
+    } finally { migrating = false; }
+  }
+
   /* ---- scan the phone: songs found this way are only indexed here (no copy); the file is read when played ---- */
   const scanner = plugin('MusicScan');
   const fileUrl = (path) => (cap && cap.convertFileSrc ? cap.convertFileSrc('file://' + path) : path);
@@ -291,7 +314,7 @@
   function applyEq() { pushFx(); if (ctx) filters.forEach((f, i) => { f.gain.value = entitled.has('pro') && fx.eq ? fx.gains[i] : 0; }); }
   const resumeCtx = () => (ctx && ctx.state === 'suspended' ? ctx.resume().catch(() => {}) : Promise.resolve());
 
-  const fxPayload = () => ({ pro: entitled.has('pro'), eq: !!fx.eq, gains: fx.gains, xfade: fx.xfade });
+  const fxPayload = () => ({ pro: entitled.has('pro'), eq: !!fx.eq, gains: fx.gains, xfade: fx.xfade, rg: prefs.replaygain !== false, slow: prefs.recordstop !== false });
   const pushFx = () => { if (nativeLive) bg.setFx(fxPayload()).catch(() => {}); };
   async function sendQueue(i, autoplay, pos) { // hand the native player the play order (once per order) and start song `i`
     if (nativeLive && nativeVer === orderVer) { await bg.playIndex({ index: i, autoplay, position: pos, ...fxPayload() }); return; }
@@ -299,6 +322,7 @@
     nativeVer = orderVer; nativeLive = true;
   }
   const queueItems = () => order.map((x) => { const q = lib.find((y) => y.id === x) || {}; return { id: x, path: q.path || '', title: q.title || '', artist: q.artist || '', album: q.album || '', dur: q.dur || 0 }; });
+  function orderEdited() { orderVer++; syncQueue(); updateUpNext(); } // the queue was edited by hand: tell the native player too
   function syncQueue() { // the play order changed (shuffle, library edit) while the native player is playing: give it the new order without interrupting the song
     if (!(audio === nd && nativeLive) || !cur) return;
     const i = order.indexOf(cur.id); if (i < 0) return;
@@ -511,11 +535,13 @@
 
   /* ================= lyrics (LRCLIB; CapacitorHttp makes fetch bypass CORS) ================= */
   const lyricCache = new Map();
+  const lyricDisk = { get: (k) => (LS.get('vibe.lyrics', {}) || {})[k] || null, put(k, v) { const all = LS.get('vibe.lyrics', {}) || {}; delete all[k]; all[k] = v; const ks = Object.keys(all); if (ks.length > 150) ks.slice(0, ks.length - 150).forEach((x) => delete all[x]); LS.set('vibe.lyrics', all); } }; // seen lyrics also work offline
   async function getJson(url) { try { const r = await fetch(url, { headers: { 'User-Agent': 'NorwinVibe-Mobile/1.0' } }); return r.ok ? await r.json() : null; } catch { return null; } }
   async function fetchLyrics({ artist, title, album, dur }) {
     const s = (v) => String(v || '').slice(0, 200); artist = s(artist); title = s(title); album = s(album);
     if (!artist || !title) return null;
     const key = `${artist}|${title}|${Math.round(dur)}`.toLowerCase(); if (lyricCache.has(key)) return lyricCache.get(key);
+    const saved = lyricDisk.get(key); if (saved) { lyricCache.set(key, saved); return saved; }
     const q = new URLSearchParams({ artist_name: artist, track_name: title }); if (album) q.set('album_name', album); if (dur > 0) q.set('duration', String(Math.round(dur)));
     let hit = await getJson(`https://lrclib.net/api/get?${q}`);
     if (!hit) {
@@ -523,7 +549,7 @@
       if (Array.isArray(list)) { const close = (x) => !(dur > 0) || Math.abs((x.duration || 0) - dur) <= 4; hit = list.find((x) => x.syncedLyrics && close(x)) || list.find((x) => x.plainLyrics && close(x)) || null; }
     }
     const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '' } : null;
-    if (lyricCache.size > 100) lyricCache.clear(); lyricCache.set(key, out); return out;
+    if (lyricCache.size > 100) lyricCache.clear(); lyricCache.set(key, out); if (out) lyricDisk.put(key, out); return out;
   }
 
   /* ================= sleep timer (Pro: fade out over the last 15 seconds) ================= */
@@ -584,6 +610,7 @@
   /* ================= the bridge the shared UI talks to ================= */
   const storeCfg = () => window.STORE_CONFIG || { items: {} };
   window.api = {
+    setLoop: (a, b) => { if (nativeLive && audio === nd && bg.setLoop) bg.setLoop({ a: Math.round((a || 0) * 1000), b: Math.round((b || 0) * 1000) }).catch(() => {}); },
     idleResume: () => { const l = LS.get('vibe.last', null), t = l && lib.find((x) => x.id === l.id); return t ? { title: t.title, artist: t.artist || '' } : null; }, // the idle card's "Resume" button
     playRecent: (id) => { // a song tapped under "recently played" on the idle card (ids are "artist|title")
       const t = lib.find((x) => `${x.artist || ''}|${x.title}`.toLowerCase() === id) || lib.find((x) => id.endsWith(`|${x.title.toLowerCase()}`));
@@ -609,7 +636,7 @@
       for (const [k, v] of Object.entries(patch || {})) {
         if (PRO_KEYS.has(k) && !entitled.has('pro')) continue;
         if (ENUMS[k] && ENUMS[k].includes(v) && allowed(k, v)) prefs[k] = v; else if (typeof DEFAULTS[k] === 'boolean' && typeof v === 'boolean') prefs[k] = v;
-      } savePrefs();
+      } savePrefs(); if ('replaygain' in (patch || {}) || 'recordstop' in (patch || {})) pushFx();
     },
     exportFile: async (f) => { // share sheet (save to Files / send to an app); falls back to the clipboard for text
       try {
@@ -621,16 +648,20 @@
       return { ok: false };
     },
     lyrics: (m) => fetchLyrics(m || {}),
-    toast: () => {}, sleep: (m) => setSleep([0, 15, 30, 60].includes(m) ? m : 0),
+    toast: () => {}, sleep: (m) => setSleep([0, 5, 10, 15, 30, 45, 60, 90, 120].includes(m) ? m : 0),
     close: () => {}, minimize: () => {}, pin: () => {}, mini: () => {}, fullscreen: () => {},
     storeInfo: async () => {
       const c = storeCfg();
-      return { owned: entitlementList(), items: Object.fromEntries(['pro', ...PACK_IDS].map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])) };
+      return { owned: entitlementList(), restore: /^https:\/\//.test(c.restoreUrl || ''), items: Object.fromEntries(['pro', ...PACK_IDS].map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])) };
     },
     storeBuy: async (id) => {
       const url = storeCfg().items?.[id]?.checkoutUrl;
       if (!['pro', ...PACK_IDS].includes(id) || !/^https:\/\//.test(url || '')) return { ok: false, error: 'Checkout is not set up yet.' };
       window.open(url, '_blank'); return { ok: true };
+    },
+    storeRestore: async (email) => {
+      const url = storeCfg().restoreUrl; if (!/^https:\/\//.test(url || '')) return { ok: false, error: 'Restore is not set up yet.' };
+      try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); return { ok: r.ok }; } catch { return { ok: false, error: 'No connection.' }; }
     },
     storeRedeem: async (key) => {
       const o = verifyLicense(key); if (!o) return { ok: false, error: 'That license key is not valid or has expired.' };
@@ -707,7 +738,27 @@
   function playNext(id) {
     if (!cur) { source = { type: 'library', id: null }; playId(id); return; }
     const k = order.indexOf(id); if (k >= 0) { order.splice(k, 1); if (k <= idx) idx--; }
-    order.splice(idx + 1, 0, id); toast('Playing next'); updateUpNext();
+    order.splice(idx + 1, 0, id); toast('Playing next'); orderEdited();
+  }
+  /* drag a queue row by its handle to a new place; the list below it makes room as you go */
+  function dragReorder(handle, row, pos) {
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault(); handle.setPointerCapture(e.pointerId);
+      const rows = [...listEl.querySelectorAll('.hrow')], from = rows.indexOf(row), h = row.offsetHeight, y0 = e.clientY;
+      let to = from; row.classList.add('dragging'); row.style.zIndex = 3; row.style.position = 'relative';
+      const move = (ev) => {
+        const dy = ev.clientY - y0; row.style.transform = `translateY(${dy}px)`;
+        to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / h)));
+        rows.forEach((r, i) => { if (r !== row) r.style.transform = i > from && i <= to ? `translateY(${-h}px)` : i < from && i >= to ? `translateY(${h}px)` : ''; });
+      };
+      const up = () => {
+        handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up);
+        if (to !== from) { const [x] = order.splice(pos, 1); order.splice(idx + 1 + to, 0, x); orderEdited(); }
+        renderQueue();
+      };
+      handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+    });
   }
   function renderQueue() { // what is coming up; tap to jump there, arrow = move to the top, x = take it out
     listEl.textContent = '';
@@ -717,11 +768,15 @@
     ids.forEach((id, n) => {
       const t = lib.find((x) => x.id === id); if (!t) return;
       const pos = idx + 1 + n;
+      const handle = document.createElement('button'); handle.className = 'star drag-h'; handle.title = 'Drag to reorder'; handle.setAttribute('aria-label', 'Drag to reorder');
+      handle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg>';
       const row = songRow(t, [
-        iconBtn('Move to the top', ICON_UP, () => { order.splice(pos, 1); order.splice(idx + 1, 0, id); updateUpNext(); renderQueue(); }),
-        iconBtn('Remove from the queue', ICON_X, () => { order.splice(pos, 1); updateUpNext(); renderQueue(); }),
+        handle,
+        iconBtn('Move to the top', ICON_UP, () => { order.splice(pos, 1); order.splice(idx + 1, 0, id); orderEdited(); renderQueue(); }),
+        iconBtn('Remove from the queue', ICON_X, () => { order.splice(pos, 1); orderEdited(); renderQueue(); }),
       ]);
       row.onclick = () => { idx = pos - 1; next(); closeLib(); };
+      dragReorder(handle, row, pos);
       listEl.appendChild(row);
     });
   }
@@ -799,7 +854,7 @@
   let searchTimer = 0; searchEl.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLibrary, 160); }; // wait for a pause in typing
   $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
   $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
-  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
+  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */

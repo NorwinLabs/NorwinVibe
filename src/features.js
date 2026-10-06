@@ -46,6 +46,7 @@ function showPrefs() {
   root.dataset.needle = L.needle || P.needle || 'classic';
   root.dataset.viz = L.viz || P.viz || 'bars';
   root.dataset.fade = P.fade ? 'on' : 'off';
+  root.dataset.deckskin = P.deckskin || 'dark';
   document.body.classList.toggle('no-lyrics', !P.lyrics);
   document.querySelectorAll('.chips[data-pref]').forEach((c) => c.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === P[c.dataset.pref])));
   document.querySelectorAll('.chips button[data-paid]').forEach((b) => b.classList.toggle('locked', !owns(b.dataset.paid)));
@@ -61,6 +62,7 @@ function setPref(k, v) {
   P[k] = v; bridge.setPrefs({ [k]: v }); showPrefs();
   if (k === 'theme') applyPalette(el.label.classList.contains('art') ? art.data : '');
   if (k === 'lyrics') { if (v) loadLyrics(st, curDisplay); else clearLyrics(); }
+  if (k === 'dancers' || k === 'dancerpack') window.dispatchEvent(new Event('vibe:dancers'));
 }
 const owns = (id) => (P.owned || []).includes(id);
 document.querySelectorAll('.chips[data-pref] button').forEach((b) => {
@@ -92,6 +94,7 @@ const storeMsg = (t) => { $('store-msg').textContent = t || ''; };
 async function renderStore(focus) {
   try { storeInfo = await bridge.storeInfo(); } catch {}
   P.owned = storeInfo.owned; showPrefs();
+  $('restore-box').style.display = storeInfo.restore ? '' : 'none'; // only when a restore service is set up (store.config.json restoreUrl)
   const box = $('store-items'); box.textContent = '';
   for (const [id, it] of Object.entries(storeInfo.items)) {
     const ui = STORE_UI[id] || { blurb: '', parts: [], apply: {} };
@@ -127,6 +130,12 @@ $('key-redeem').onclick = async () => {
   const key = $('key-in').value.trim(); if (!key) return;
   const r = await bridge.storeRedeem(key);
   if (r.ok) { $('key-in').value = ''; storeMsg('Unlocked! Thank you.'); hud('Unlocked'); renderStore(r.item); } else storeMsg(r.error);
+};
+$('mail-send').onclick = async () => {
+  const email = $('mail-in').value.trim(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { storeMsg('Enter the email you bought with.'); return; }
+  storeMsg('Sending…');
+  const r = await bridge.storeRestore(email);
+  storeMsg(r && r.ok ? 'If that email has a purchase, your keys are on their way.' : ((r && r.error) || 'Could not send right now. Try again later.'));
 };
 bridge.onOwned((list) => {
   P.owned = list;
@@ -191,16 +200,19 @@ el.card.addEventListener('wheel', (e) => {
 }, { passive: true });
 
 /* ---------- sleep timer ---------- */
-let sleepEnds = 0;
+let sleepEnds = 0, sleepSong = false; // sleepSong: pause when the current song finishes
 document.querySelectorAll('#sleep-chips button').forEach((b) => {
-  b.onclick = () => { const m = +b.dataset.v; sleepEnds = m ? Date.now() + m * 60000 : 0; bridge.sleep(m); updateSleep(m); hud(m ? `Pausing in ${m} min` : 'Sleep timer off'); };
+  b.onclick = () => {
+    if (b.dataset.v === 'song') { sleepSong = true; sleepEnds = 0; bridge.sleep(0); updateSleep('song'); hud('Pausing when this song ends'); return; }
+    const m = +b.dataset.v; sleepSong = false; sleepEnds = m ? Date.now() + m * 60000 : 0; bridge.sleep(m); updateSleep(m); hud(m ? `Pausing in ${m} min` : 'Sleep timer off');
+  };
 });
 bridge.onSleep((t) => { sleepEnds = t; updateSleep(); });
 function updateSleep(chosen) {
   const left = sleepEnds - Date.now();
   $('sleep-left').textContent = left > 0 ? `${Math.ceil(left / 60000)} min left` : '';
-  const sel = chosen !== undefined ? chosen : left > 0 ? [15, 30, 60].find((m) => left <= m * 60000 + 1000) : 0;
-  document.querySelectorAll('#sleep-chips button').forEach((b) => b.classList.toggle('on', +b.dataset.v === (sel || 0)));
+  const sel = sleepSong ? 'song' : chosen !== undefined ? chosen : left > 0 ? [5, 10, 15, 30, 45, 60, 90, 120].find((m) => left <= m * 60000 + 1000) : 0;
+  document.querySelectorAll('#sleep-chips button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(sel || 0)));
 }
 setInterval(updateSleep, 5000); updateSleep(0);
 
@@ -226,7 +238,14 @@ function parseLRC(text) {
   }
   return out.sort((a, b) => a.t - b.t);
 }
+/* the dot beside Shuffle: green = lyrics were found and will show for this song, grey = none (or off / still searching) */
+function setLyrDot(state) {
+  const d = $('lyr-dot'); if (!d) return;
+  d.className = 'lyr-dot ' + state;
+  d.title = state === 'found' ? 'Lyrics found: they will show for this song' : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
+}
 function clearLyrics(msg = '') {
+  setLyrDot('none');
   lyr = { token: lyr.token + 1, lines: [], synced: false, idx: -1 };
   lyricEl.textContent = ''; lyricsBox.textContent = '';
   if (msg) { const n = document.createElement('div'); n.className = 'none'; n.textContent = msg; lyricsBox.appendChild(n); }
@@ -235,7 +254,7 @@ async function loadLyrics(m, d) {
   clearLyrics();
   if (!P.lyrics || !m.active || !d || !d.title || !d.artist || m.dur > 900) { if (m.active && m.dur > 900) clearLyrics('Lyrics are skipped for long videos'); return; }
   const token = lyr.token;
-  clearLyrics('Searching for lyrics…'); lyr.token = token + 1;
+  clearLyrics('Searching for lyrics…'); lyr.token = token + 1; setLyrDot('busy');
   const mine = lyr.token;
   const title = d.title.replace(/\s*[-–]\s*(remaster(ed)?|\d{4}\s+remaster|live|single version|radio edit).*$/i, '').trim();
   let res = null;
@@ -250,8 +269,10 @@ async function loadLyrics(m, d) {
   } else { clearLyrics('No lyrics found'); lyr.token = mine; return; }
   for (const l of lyr.lines) {
     const n = document.createElement('div'); n.className = 'ln' + (l.t === null ? ' plain' : ''); n.textContent = l.text || '♪';
+    if (l.t !== null) { n.title = 'Jump to this line'; n.onclick = () => { if (st.active && st.canSeek) seekTo(l.t); }; } // tap a line to jump there
     l.el = n; lyricsBox.appendChild(n);
   }
+  setLyrDot('found');
 }
 
 function lineAt(pos) { // last synced line whose time <= pos (binary search)
@@ -263,6 +284,18 @@ function lineAt(pos) { // last synced line whose time <= pos (binary search)
 const tiltEl = $('tilt'), stageEl = $('stage'), deckWrap = document.querySelector('.vinyl-wrap');
 const TILT_DEG = 58;
 let deckOn = null, deckBusy = false, deckRaf = 0;
+/* the 3D player follows the mouse (or the phone's tilt) a little, so it feels like an object you are looking at */
+const deckLook = { tx: 0, ty: 0, x: 0, y: 0, applied: '' };
+function deckLookStep() {
+  if (deckBusy || root.dataset.deck !== '3d' || document.body.classList.contains('mini')) return;
+  const on = P.deckmove !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tx = on ? deckLook.tx : 0, ty = on ? deckLook.ty : 0;
+  deckLook.x += (tx - deckLook.x) * 0.1; deckLook.y += (ty - deckLook.y) * 0.1;
+  const v = `rotateX(${(TILT_DEG + deckLook.y * -6).toFixed(2)}deg) rotateZ(${(deckLook.x * 5).toFixed(2)}deg)`;
+  if (v !== deckLook.applied) { deckLook.applied = v; tiltEl.style.transform = v; }
+}
+document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { deckLook.tx = e.clientX / innerWidth * 2 - 1; deckLook.ty = e.clientY / innerHeight * 2 - 1; } });
+window.addEventListener('deviceorientation', (e) => { if (e.gamma == null) return; deckLook.tx = Math.max(-1, Math.min(1, e.gamma / 25)); deckLook.ty = Math.max(-1, Math.min(1, ((e.beta || 45) - 45) / 25)); });
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const easeOut = (x) => 1 - Math.pow(1 - x, 3);
@@ -347,6 +380,7 @@ const applyArm = () => {
   armEl.style.setProperty('--lift', liftPos.toFixed(3));
 };
 function updateArm(t, pos) {
+  deckLookStep();
   const dt = Math.max(0, Math.min(0.1, (t - (armLast || t)) / 1000)); armLast = t; // never negative or huge (clock jumps, tab resume)
   if (!Number.isFinite(armAngle)) armAngle = REST_DEG;
   if (!armRange || performance.now() - armRangeAt > 400) measureArm();
@@ -390,8 +424,21 @@ const endNeedle = () => {
 armEl.addEventListener('pointerup', endNeedle);
 armEl.addEventListener('pointercancel', endNeedle);
 
+/* ---------- A-B loop: repeat a section of the song ---------- */
+const abLoop = { a: null, b: null, at: 0 };
+function loopUi() {
+  $('loop-n').textContent = abLoop.a === null ? '' : abLoop.b === null ? `A ${fmt(abLoop.a)}` : `${fmt(abLoop.a)} \u2192 ${fmt(abLoop.b)}`;
+  if (bridge.setLoop) bridge.setLoop(abLoop.a, abLoop.b); // the phone's native player loops precisely on its own
+}
+$('loop-a').onclick = () => { if (!st.active) return; abLoop.a = livePos(); if (abLoop.b !== null && abLoop.b <= abLoop.a) abLoop.b = null; loopUi(); hud('Loop start set'); };
+$('loop-b').onclick = () => { if (!st.active || abLoop.a === null) { hud('Set A first'); return; } const b = livePos(); if (b <= abLoop.a + 0.5) { hud('B must be after A'); return; } abLoop.b = b; loopUi(); hud('Looping A to B'); };
+$('loop-clear').onclick = () => { abLoop.a = abLoop.b = null; loopUi(); hud('Loop cleared'); };
 function featFrame(t, pos) {
   updateArm(t, pos);
+  if (st.active && st.playing) {
+    if (abLoop.b !== null && pos >= abLoop.b && t - abLoop.at > 700) { abLoop.at = t; seekTo(abLoop.a); }
+    if (sleepSong && st.dur > 3 && pos >= st.dur - 0.7) { sleepSong = false; send('pause'); updateSleep(0); hud('Paused at the end of the song'); }
+  }
   if (!lyr.synced) return;
   const i = lineAt(pos + 0.25 + lyrOff);
   if (i === lyr.idx) return;
@@ -467,6 +514,7 @@ function saveEntry(entry) { // newest first, de-duplicated, capped
   list.unshift(entry); store.set('nv.history', list.slice(0, 60));
 }
 function onTrackChange(m, d) {
+  if (abLoop.a !== null) { abLoop.a = abLoop.b = null; loopUi(); } // a new song: no loop
   renderIdle(m.active); if (!m.active) setTimeout(idleDecor, 0);
   curDisplay = m.active ? d : null;
   curEntry = null; curId = '';

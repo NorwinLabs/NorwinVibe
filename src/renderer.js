@@ -364,7 +364,7 @@ function drawViz(t, playing) {
   }
 
   if (mode === 'bars') {
-    vctx.strokeStyle = g; vctx.lineWidth = 8; vctx.shadowColor = a1; vctx.shadowBlur = 14;
+    vctx.strokeStyle = g; vctx.lineWidth = 8; vctx.shadowColor = a1; vctx.shadowBlur = window.FRAME_MS ? 0 : 14; // the glow is the costly part: phones and battery saver skip it
     for (let i = 0; i < BARS; i++) {
       const [x1, y1] = at(i, base), [x2, y2] = at(i, base + 2 + levels[i] * (maxLen - 2));
       vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2);
@@ -383,7 +383,7 @@ function drawViz(t, playing) {
     vctx.beginPath();
     pts.forEach((p, i) => { const n = pts[(i + 1) % BARS], mx = (p[0] + n[0]) / 2, my = (p[1] + n[1]) / 2; if (!i) vctx.moveTo(mx, my); else vctx.quadraticCurveTo(p[0], p[1], mx, my); });
     const f = pts[0], n = pts[1]; vctx.quadraticCurveTo(f[0], f[1], (f[0] + n[0]) / 2, (f[1] + n[1]) / 2);
-    vctx.strokeStyle = g; vctx.lineWidth = 7; vctx.shadowColor = a1; vctx.shadowBlur = 14; vctx.globalAlpha = .95; vctx.stroke(); vctx.shadowBlur = 0;
+    vctx.strokeStyle = g; vctx.lineWidth = 7; vctx.shadowColor = a1; vctx.shadowBlur = window.FRAME_MS ? 0 : 14; vctx.globalAlpha = .95; vctx.stroke(); vctx.shadowBlur = 0;
     vctx.fillStyle = g; vctx.globalAlpha = .22; vctx.fill();
   } else if (mode === 'cyber') { // twin offset neon bars (chromatic split) + a slowly turning dashed outer ring
     for (const [col, dx] of [['#05d9e8', 2.5], ['#ff2a6d', -2.5]]) {
@@ -447,11 +447,12 @@ el.vinyl.addEventListener('pointercancel', endScratch);
 let lastDraw = 0, lastPlayingAt = 0, lastPct = '', lastCur = '', lastDurTxt = '';
 function frame(t) {
   requestAnimationFrame(frame);
+  if (document.hidden) return; // nothing to see: no drawing, no battery
   const playing = el.card.classList.contains('playing');
   if (playing) lastPlayingAt = t;
   // Phones draw at ~30 fps (window.FRAME_MS), and anything sitting still (paused for a while, nothing playing) at 10 fps:
   // the record and ring look the same but the CPU/GPU and battery do far less.
-  const resting = !playing && vel < .05 && !scratch && !dragging && !needleDrag && t - lastPlayingAt > 2500;
+  const resting = !playing && vel < .05 && !scratch && !dragging && !(typeof needleDrag !== 'undefined' && needleDrag) && t - lastPlayingAt > 2500; // (needleDrag lives in features.js, which may not have loaded yet)
   const gap = resting ? 100 : (window.FRAME_MS || 0);
   if (gap && t - lastDraw < gap - 3) return;
   lastDraw = t;
@@ -496,3 +497,9 @@ function demoApi() {
     close() {}, minimize() {}, minimizeWindow() {}, pin() {}, mini() {},
   };
 }
+
+/* battery saver: on a low, unplugged battery draw fewer frames (the phone app already caps its frame rate) */
+if (navigator.getBattery) navigator.getBattery().then((b) => {
+  const base = window.FRAME_MS || 0, apply = () => { window.FRAME_MS = !b.charging && b.level <= 0.2 ? Math.max(base, 50) : base; };
+  apply(); ['levelchange', 'chargingchange'].forEach((e) => b.addEventListener(e, apply));
+}).catch(() => {});

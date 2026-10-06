@@ -204,17 +204,29 @@ const TOUR = document.body.classList.contains('mobile') ? [
   ['Everything is in Settings', 'Look, Player, Pro and About. Click the version at the bottom to check for updates.'],
   ['Hotkeys', 'Ctrl+Alt+Space plays or pauses from anywhere, and Ctrl+Alt+G makes the player click-through.'],
 ];
-let tourStep = 0;
-function showTour(i) {
+/* what's new: shown once to people who already took the first-run tour (and after it for new people) */
+const TOUR_NEW = [
+  ['3D record player', 'Settings > Look > 3D record player flips the record onto a turntable. Works in full screen and ambient mode too.'],
+  ['Scratch it', 'Drag the record back and forth to scrub, and it scratches like a real one. Pixel dancers pop up when the music plays (Settings > Look).'],
+  ['Bigger visualizer', 'The ring reacts harder now. Tap any synced lyric line to jump to it.'],
+];
+const TOUR_VER = '2';
+let tourList = TOUR, tourStep = 0;
+function showTour(i, list) {
+  if (list) tourList = list;
   tourStep = i; const t = $('tour');
-  if (i >= TOUR.length) { t.hidden = true; try { localStorage.setItem('nv.tour', '1'); } catch {} return; }
-  t.hidden = false; $('tour-t').textContent = TOUR[i][0]; $('tour-p').textContent = TOUR[i][1];
-  $('tour-dots').textContent = TOUR.map((_, k) => (k === i ? '●' : '○')).join(' ');
-  $('tour-next').textContent = i === TOUR.length - 1 ? 'Done' : 'Next';
+  if (i >= tourList.length) { t.hidden = true; try { localStorage.setItem('nv.tour', '1'); localStorage.setItem('nv.tourNew', TOUR_VER); } catch {} return; }
+  t.hidden = false; $('tour-t').textContent = tourList[i][0]; $('tour-p').textContent = tourList[i][1];
+  $('tour-dots').textContent = tourList.map((_, k) => (k === i ? '\u25CF' : '\u25CB')).join(' ');
+  $('tour-next').textContent = i === tourList.length - 1 ? 'Done' : 'Next';
 }
 $('tour-next').onclick = () => showTour(tourStep + 1);
-$('tour-skip').onclick = () => showTour(TOUR.length);
-$('btn-tour').onclick = () => { closePops(); showTour(0); };
-{ let seen = false; try { seen = !!localStorage.getItem('nv.tour'); } catch {} if (!seen) setTimeout(() => showTour(0), 2500); }
+$('tour-skip').onclick = () => showTour(tourList.length);
+$('btn-tour').onclick = () => { closePops(); showTour(0, TOUR); };
+{
+  let seen = false, newSeen = false; try { seen = !!localStorage.getItem('nv.tour'); newSeen = localStorage.getItem('nv.tourNew') === TOUR_VER; } catch {}
+  if (!seen) setTimeout(() => showTour(0, TOUR.concat(TOUR_NEW)), 2500); // first run: the basics, then what is new
+  else if (!newSeen) setTimeout(() => showTour(0, TOUR_NEW), 2500); // an update with new things to show off
+}
 
 prefsReady.then(extrasRefresh);
