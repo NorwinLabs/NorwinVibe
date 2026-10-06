@@ -472,7 +472,7 @@ function demoApi() {
   return {
     onState: (f) => (cbS = f), onArt: (f) => (cbA = f),
     cmd: (c) => { if (c === 'toggle') s.playing = !s.playing; if (c.startsWith('shuffle:')) s.shuffle = c.endsWith('1'); if (c.startsWith('repeat:')) s.repeat = c.slice(7); if (c.startsWith('seek:')) s.pos = parseFloat(c.slice(5)); cbS({ ...s }); },
-    prefs: async () => ({ mini: q.has('mini'), pin: true, speed: 'slow', theme: q.get('theme') || 'art', record: q.get('record') || 'vinyl', needle: q.get('needle') || 'classic', viz: q.get('viz') || 'bars', owned: JSON.parse(localStorage.getItem('demo.owned') || '[]'), lyrics: true, toasts: true, fade: false, snap: true, autostart: false, sleepEnds: 0 }),
+    prefs: async () => ({ deck3d: q.has('deck3d'), mini: q.has('mini'), pin: true, speed: 'slow', theme: q.get('theme') || 'art', record: q.get('record') || 'vinyl', needle: q.get('needle') || 'classic', viz: q.get('viz') || 'bars', owned: JSON.parse(localStorage.getItem('demo.owned') || '[]'), lyrics: true, toasts: true, fade: false, snap: true, autostart: false, sleepEnds: 0 }),
     setPrefs() {}, onOwned() {},
     storeInfo: async () => ({ testMode: true, owned: JSON.parse(localStorage.getItem('demo.owned') || '[]'), items: { cyberpunk: { name: 'Cyberpunk', price: '$0.99', hasCheckout: false }, nightcity: { name: 'Night City', price: '$0.99', hasCheckout: false } } }),
     storeBuy: async () => ({ ok: false, error: 'Checkout is not set up yet. Add a checkoutUrl in store.config.json.' }),

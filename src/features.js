@@ -54,6 +54,7 @@ function showPrefs() {
   refreshDev();
   if (typeof refreshPro === 'function') refreshPro();
   if (typeof extrasRefresh === 'function') extrasRefresh();
+  applyDeck(!!P.deck3d);
 }
 function setPref(k, v) {
   if (typeof onLookPref === 'function') onLookPref(k, v);
@@ -258,6 +259,48 @@ function lineAt(pos) { // last synced line whose time <= pos (binary search)
   while (lo <= hi) { const mid = (lo + hi) >> 1; if (a[mid].t <= pos) { r = mid; lo = mid + 1; } else hi = mid - 1; }
   return r;
 }
+/* ---------- 3D record player: the flat record flips over and lands on a turntable ---------- */
+const tiltEl = $('tilt'), stageEl = $('stage'), deckWrap = document.querySelector('.vinyl-wrap');
+const TILT_DEG = 58;
+let deckOn = null, deckBusy = false, deckRaf = 0;
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+function deckStatic(on) {
+  cancelAnimationFrame(deckRaf); deckBusy = false;
+  root.classList.remove('deck-anim');
+  root.dataset.deck = on ? '3d' : 'flat';
+  tiltEl.style.transform = on ? `rotateX(${TILT_DEG}deg)` : '';
+  stageEl.style.setProperty('--deck', on ? '1' : '0'); tiltEl.style.setProperty('--deck', on ? '1' : '0');
+  deckWrap.style.transform = '';
+}
+/* q runs 0 (flat) to 1 (on the turntable): the card tilts back, the turntable rises, and the record lifts off, flips once
+   (a full turn over) and settles onto the platter. Played backwards it flips back to a flat record. */
+function deckFrame(q) {
+  const u = clamp01((q - 0.08) / 0.84);
+  tiltEl.style.transform = `rotateX(${(TILT_DEG * easeIO(clamp01(q / 0.95))).toFixed(2)}deg)`;
+  const dk = clamp01((q - 0.12) / 0.6).toFixed(3); tiltEl.style.setProperty('--deck', dk); stageEl.style.setProperty('--deck', dk);
+  const z = 16 * u + 95 * Math.sin(Math.PI * u) * (1 - 0.25 * u);
+  deckWrap.style.transform = `translate3d(-14px, 0, ${z.toFixed(1)}px) rotateX(${(360 * easeOut(u)).toFixed(1)}deg)`;
+}
+function animateDeck(on) {
+  cancelAnimationFrame(deckRaf);
+  deckBusy = true; root.classList.add('deck-anim'); root.dataset.deck = '3d';
+  const T = 1700, t0 = performance.now();
+  const step = (now) => {
+    const p = clamp01((now - t0) / T);
+    deckFrame(on ? p : 1 - p);
+    if (p < 1) deckRaf = requestAnimationFrame(step); else deckStatic(on);
+  };
+  deckRaf = requestAnimationFrame(step);
+}
+function applyDeck(on) {
+  const still = deckOn === null || document.body.classList.contains('mini') || document.body.classList.contains('fullscreen') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (on === deckOn) return;
+  deckOn = on;
+  if (still) deckStatic(on); else animateDeck(on);
+}
+
 /* ---------- needle: locked to song progress and eased every frame ---------- */
 const armEl = $('arm'), armBase = armEl.querySelector('.arm-base'), tipEl = armEl.querySelector('.arm-tip'), wrapEl = document.querySelector('.vinyl-wrap');
 const R_OUT = 110, R_IN = 50; // stylus distance from the record centre at the first / last groove (record radius is 118)
@@ -265,7 +308,15 @@ const REST_DEG = -4;          // parked position beside the record
 let armTip = [4.2, 173.7];    // stylus position relative to the pivot, unrotated (px); re-measured from the live DOM
 let armRange = null, armRangeAt = 0, armAngle = REST_DEG, armLast = 0;
 
-function measureArm() {
+function measureArm() { // the arm maths needs the flat layout, so look at it flat for a moment (nothing is painted in between)
+  if (deckBusy) return;
+  const flat = root.dataset.deck === '3d';
+  if (!flat) return measureArmFlat();
+  const keep = [tiltEl.style.transform, stageEl.style.perspective];
+  tiltEl.style.transform = 'none'; stageEl.style.perspective = 'none';
+  try { measureArmFlat(); } finally { tiltEl.style.transform = keep[0]; stageEl.style.perspective = keep[1]; }
+}
+function measureArmFlat() {
   const w = wrapEl.getBoundingClientRect(), b = armBase.getBoundingClientRect(), tp = tipEl.getBoundingClientRect();
   if (!w.width) return;
   const s = w.width / 236, cx = w.left + w.width / 2, cy = w.top + w.height / 2, px = b.left + b.width / 2, py = b.top + b.height / 2;

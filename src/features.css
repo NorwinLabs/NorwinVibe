@@ -488,3 +488,36 @@ body.ghost .card { opacity: .62; }
   .idle .glow { animation: breathe 5s ease-in-out infinite, idlehue 20s ease-in-out infinite alternate; }
 }
 @keyframes idlehue { to { filter: blur(34px) hue-rotate(55deg); } }
+
+/* ================= 3D record player (Settings > Look > 3D record player) ================= */
+.tilt { position: relative; width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }
+.armz { position: absolute; inset: 0; pointer-events: none; transform-style: preserve-3d; }
+.plinth, .deck-shadow { display: none; }
+html[data-deck="3d"] .stage { perspective: 900px; perspective-origin: 50% 35%; }
+html[data-deck="3d"] .plinth { display: block; }
+html[data-deck="3d"] .deck-shadow { display: block; }
+/* the turntable: its top surface is the plane z = 0; the record sits a little above it */
+.plinth { position: absolute; left: 50%; top: 50%; width: 292px; height: 258px; margin: -129px 0 0 -146px; transform-style: preserve-3d;
+  opacity: var(--deck, 0); transform: translateZ(calc((var(--deck, 0) - 1) * 70px)); pointer-events: none; }
+.plinth .pf { position: absolute; display: block; }
+.plinth .pf-t { inset: 0; border-radius: 12px; background: linear-gradient(160deg, #3a3a46, #1d1d26 55%, #14141a); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 26px rgba(0,0,0,.55); }
+.plinth .pf-f { left: 0; top: 100%; width: 100%; height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 10px 10px; background: linear-gradient(#2a2a33, #0c0c10); }
+.plinth .pf-r { left: 100%; top: 0; width: 38px; height: 100%; transform-origin: 0 50%; transform: rotateY(90deg); background: linear-gradient(90deg, #22222b, #0a0a0e); }
+.plinth .pf-l { right: 100%; top: 0; width: 38px; height: 100%; transform-origin: 100% 50%; transform: rotateY(-90deg); background: linear-gradient(270deg, #22222b, #0a0a0e); }
+.plinth .platter { left: 50%; top: 50%; width: 252px; height: 252px; margin: -126px 0 0 -140px; border-radius: 50%; transform: translateZ(7px);
+  background: radial-gradient(circle, #8d8d99 0 8%, #55555f 9% 70%, #9a9aa6 71% 74%, #2a2a31 75%); box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 6px 14px rgba(0,0,0,.6); }
+.plinth .dknob { left: 16px; bottom: 16px; width: 34px; height: 34px; border-radius: 50%; transform: translateZ(4px); background: radial-gradient(circle at 35% 30%, #e6e6ee, #6b6b78 70%); box-shadow: 0 3px 6px rgba(0,0,0,.6); }
+.plinth .dbtn { left: 62px; bottom: 22px; width: 22px; height: 22px; border-radius: 50%; transform: translateZ(3px); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 60%, #fff), var(--accent)); box-shadow: 0 0 10px var(--accent); }
+.plinth .dpitch { right: 14px; bottom: 14px; width: 12px; height: 92px; border-radius: 6px; transform: translateZ(2px); background: linear-gradient(#0b0b0f, #23232c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.deck-shadow { position: absolute; left: 50%; bottom: 14px; width: 270px; height: 40px; margin-left: -135px; border-radius: 50%; background: rgba(0,0,0,.55); filter: blur(16px); opacity: var(--deck, 0); pointer-events: none; }
+html[data-deck="3d"] body:not(.mini):not(.fullscreen) .vinyl-wrap { transform: translate3d(-14px, 0, 16px); animation: none; }
+html[data-deck="3d"] body:not(.mini):not(.fullscreen) .swap .vinyl-wrap { transform: translate3d(-14px, 0, 22px); }
+html[data-deck="3d"] body:not(.mini):not(.fullscreen) .armz { transform: translateZ(calc(var(--deck, 1) * 26px)); }
+html[data-deck="3d"] body:not(.mini):not(.fullscreen) .tilt { --deck: 1; }
+.deck-anim .vinyl-wrap { transition: none !important; animation: none !important; }
+html.deck-anim .glow { opacity: 0 !important; }
+.mini .plinth, .fullscreen .plinth, .mini .deck-shadow, .fullscreen .deck-shadow { display: none !important; }
+.mini .tilt, .fullscreen .tilt { transform: none !important; }
+.mini .stage, .fullscreen .stage { perspective: none !important; }
+.mini .armz, .fullscreen .armz { transform: none !important; }
+html[data-deck="3d"] body:not(.mini):not(.fullscreen) .glow { display: none; }
