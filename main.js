@@ -20,7 +20,7 @@ app.setAppUserModelId(APP_ID);
 const SIZES = { full: { w: 360, h: 560 }, mini: { w: 450, h: 176 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
-  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, deck3d: false, dancers: true, scratchfx: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, deck3d: false, dancers: true, dancerpack: 'people', scratchfx: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
 const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
 const ENUMS = {
   bgart: ['cover', 'soft', 'off'],
@@ -28,6 +28,8 @@ const ENUMS = {
   speed: ['slow', 'relaxed', '33', '45'],
   theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
   record: ['vinyl', 'color', 'album', 'cd', 'cyber', 'nightcity'],
+  dancerpack: ['people', 'robots', 'aliens'],
+  deckskin: ['dark', 'wood', 'neon'],
   needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
   viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
 };
@@ -336,6 +338,18 @@ const fader = createFader({ send: (c) => sendCmd(c), getVolume: () => lastVol })
 
 /* ---------- lyrics (LRCLIB: free, no account; sends artist + title over HTTPS) ---------- */
 const lyricCache = new Map();
+// Lyrics you have already seen are kept on disk, so they still show with no connection (newest 300 songs).
+const lyricFile = () => path.join(app.getPath('userData'), 'lyrics-cache.json');
+let lyricDisk = null, lyricSaveTimer = 0;
+const lyricDiskGet = (key) => {
+  if (!lyricDisk) { try { lyricDisk = JSON.parse(fs.readFileSync(lyricFile(), 'utf8')); } catch { lyricDisk = {}; } }
+  return lyricDisk[key] || null;
+};
+const lyricDiskPut = (key, out) => {
+  lyricDiskGet(key); delete lyricDisk[key]; lyricDisk[key] = out;
+  const keys = Object.keys(lyricDisk); if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete lyricDisk[k];
+  clearTimeout(lyricSaveTimer); lyricSaveTimer = setTimeout(() => { try { fs.writeFileSync(lyricFile(), JSON.stringify(lyricDisk)); } catch {} }, 2000);
+};
 async function getJson(url) {
   try {
     const r = await net.fetch(url, { headers: { 'User-Agent': 'NorwinVibe/0.1 (local media player)' } });
@@ -345,6 +359,7 @@ async function getJson(url) {
 async function fetchLyrics({ artist, title, album, dur }) {
   const key = `${artist}|${title}|${Math.round(dur)}`.toLowerCase();
   if (lyricCache.has(key)) return lyricCache.get(key);
+  const saved = lyricDiskGet(key); if (saved) { lyricCache.set(key, saved); return saved; }
   const q = new URLSearchParams({ artist_name: artist, track_name: title });
   if (album) q.set('album_name', album);
   if (dur > 0) q.set('duration', String(Math.round(dur)));
@@ -359,6 +374,7 @@ async function fetchLyrics({ artist, title, album, dur }) {
   const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '' } : null;
   if (lyricCache.size > 200) lyricCache.clear();
   lyricCache.set(key, out);
+  if (out) lyricDiskPut(key, out); // only real hits are kept; a miss may be a dropped connection, so it is tried again next time
   return out;
 }
 

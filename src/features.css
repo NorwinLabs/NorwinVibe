@@ -528,4 +528,12 @@ html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
 
 /* ================= dancing pixel people ================= */
 .dancers { position: absolute; left: 0; right: 0; bottom: 2px; width: 100%; height: 36px; image-rendering: pixelated; pointer-events: none; visibility: hidden; z-index: 3; }
-.mini .dancers, .fullscreen .dancers { display: none; }
+.mobile .dancers { bottom: -30px; }
+.dancers.crowd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; opacity: .9; }
+.dancers:not(.crowd) { display: block; }
+.fullscreen .dancers:not(.crowd), .mini .dancers { display: none; }
+body:not(.fullscreen) .dancers.crowd { display: none; }
+.fullscreen .controls, .fullscreen .progress, .fullscreen .meta { position: relative; z-index: 1; }
+
+.ln:not(.plain) { cursor: pointer; -webkit-app-region: no-drag; }
+.ln:not(.plain):hover { opacity: .75; }

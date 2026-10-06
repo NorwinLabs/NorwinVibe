@@ -15,7 +15,7 @@
   const toast = (t) => { if (typeof hud === 'function') hud(t); };
 
   /* ================= preferences & store (mirrors main.js) ================= */
-  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', deck3d: false, dancers: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
+  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', deck3d: false, dancers: true, dancerpack: 'people', scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
   const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
   const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'smartshuffle']); // only settable with a Pro license (desktop-only Pro switches are not offered here)
   const ENUMS = {
@@ -24,6 +24,8 @@
     speed: ['slow', 'relaxed', '33', '45'],
     theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
     record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
+    dancerpack: ['people', 'robots', 'aliens'],
+    deckskin: ['dark', 'wood', 'neon'],
     needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
     viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
   };
@@ -511,11 +513,13 @@
 
   /* ================= lyrics (LRCLIB; CapacitorHttp makes fetch bypass CORS) ================= */
   const lyricCache = new Map();
+  const lyricDisk = { get: (k) => (LS.get('vibe.lyrics', {}) || {})[k] || null, put(k, v) { const all = LS.get('vibe.lyrics', {}) || {}; delete all[k]; all[k] = v; const ks = Object.keys(all); if (ks.length > 150) ks.slice(0, ks.length - 150).forEach((x) => delete all[x]); LS.set('vibe.lyrics', all); } }; // seen lyrics also work offline
   async function getJson(url) { try { const r = await fetch(url, { headers: { 'User-Agent': 'NorwinVibe-Mobile/1.0' } }); return r.ok ? await r.json() : null; } catch { return null; } }
   async function fetchLyrics({ artist, title, album, dur }) {
     const s = (v) => String(v || '').slice(0, 200); artist = s(artist); title = s(title); album = s(album);
     if (!artist || !title) return null;
     const key = `${artist}|${title}|${Math.round(dur)}`.toLowerCase(); if (lyricCache.has(key)) return lyricCache.get(key);
+    const saved = lyricDisk.get(key); if (saved) { lyricCache.set(key, saved); return saved; }
     const q = new URLSearchParams({ artist_name: artist, track_name: title }); if (album) q.set('album_name', album); if (dur > 0) q.set('duration', String(Math.round(dur)));
     let hit = await getJson(`https://lrclib.net/api/get?${q}`);
     if (!hit) {
@@ -523,7 +527,7 @@
       if (Array.isArray(list)) { const close = (x) => !(dur > 0) || Math.abs((x.duration || 0) - dur) <= 4; hit = list.find((x) => x.syncedLyrics && close(x)) || list.find((x) => x.plainLyrics && close(x)) || null; }
     }
     const out = hit && (hit.syncedLyrics || hit.plainLyrics) ? { synced: hit.syncedLyrics || '', plain: hit.plainLyrics || '' } : null;
-    if (lyricCache.size > 100) lyricCache.clear(); lyricCache.set(key, out); return out;
+    if (lyricCache.size > 100) lyricCache.clear(); lyricCache.set(key, out); if (out) lyricDisk.put(key, out); return out;
   }
 
   /* ================= sleep timer (Pro: fade out over the last 15 seconds) ================= */

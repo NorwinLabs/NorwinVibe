@@ -61,6 +61,7 @@ function setPref(k, v) {
   P[k] = v; bridge.setPrefs({ [k]: v }); showPrefs();
   if (k === 'theme') applyPalette(el.label.classList.contains('art') ? art.data : '');
   if (k === 'lyrics') { if (v) loadLyrics(st, curDisplay); else clearLyrics(); }
+  if (k === 'dancers' || k === 'dancerpack') window.dispatchEvent(new Event('vibe:dancers'));
 }
 const owns = (id) => (P.owned || []).includes(id);
 document.querySelectorAll('.chips[data-pref] button').forEach((b) => {
@@ -250,6 +251,7 @@ async function loadLyrics(m, d) {
   } else { clearLyrics('No lyrics found'); lyr.token = mine; return; }
   for (const l of lyr.lines) {
     const n = document.createElement('div'); n.className = 'ln' + (l.t === null ? ' plain' : ''); n.textContent = l.text || '♪';
+    if (l.t !== null) { n.title = 'Jump to this line'; n.onclick = () => { if (st.active && st.canSeek) seekTo(l.t); }; } // tap a line to jump there
     l.el = n; lyricsBox.appendChild(n);
   }
 }
