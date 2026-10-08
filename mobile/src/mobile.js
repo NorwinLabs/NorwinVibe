@@ -195,9 +195,14 @@
     } catch { if (prompt) toast('Could not scan for music'); }
     finally { scanning = false; }
   }
-  async function lazyArt(t, blob) { // scanned songs have no cover yet: read it from the file the first time it plays
+  async function lazyArt(t, blob) { // scanned songs have no cover yet: read it the first time the song plays
     if (t.art || t.artTried || !t.path) return; t.artTried = true;
-    try { const tags = await readTags(blob); if (tags.picture) t.art = (await thumb(tags.picture)) || ''; } catch {}
+    try {
+      let url = '';
+      if (scanner && scanner.cover) { const r = await scanner.cover({ path: t.path }); url = (r && r.data) || ''; } // natively: quick, and the song is never loaded into the page
+      if (url) t.art = url;
+      else { const tags = await readTags(blob || await getBlob(t)); if (tags.picture) t.art = (await thumb(tags.picture)) || ''; } // fall back to reading the tags in the page
+    } catch {}
     dbDo('meta', 'readwrite', (s) => s.put(t)).catch(() => {}); // also remembers "no cover" so it is not read again
     if (t.art && cur && cur.id === t.id) { emitArt(); setSession(); pushNative(true); } // finished after the song started (slow file): show it now
   }
@@ -333,7 +338,7 @@
   }
   async function loadNative(t, autoplay, pos) {
     xfading = false; decks.forEach((d) => d.pause());
-    if (!t.art && !t.artTried) { try { await artFirst(t, await getBlob(t)); } catch { toast('That file is missing'); return; } } // the cover shown in the app (the notification gets its own)
+    if (!t.art && !t.artTried) { try { await artFirst(t); } catch { toast('That file is missing'); return; } } // the cover shown in the app (the notification gets its own); read natively, so the song is not loaded into the page
     if (!order.includes(t.id)) buildOrder(t.id);
     cur = t; idx = order.indexOf(t.id); useNative(); rememberLast(); emitArt();
     try { if (!bgOn) await startBackground(); await sendQueue(idx, autoplay, pos || 0); } catch { toast('Could not start the music player'); return; }
@@ -343,7 +348,7 @@
   function nativeTrack(id) { // the native player moved on by itself (next song, notification button, ...)
     const t = lib.find((x) => x.id === id); if (!t || (cur && cur.id === id && audio === nd)) return;
     cur = t; idx = order.indexOf(id); useNative(); rememberLast(); emitArt(); emit();
-    getBlob(t).then((b) => lazyArt(t, b)).catch(() => {}); // late cover is emitted by lazyArt
+    lazyArt(t).catch(() => {}); // the cover (read natively); a late one is emitted by lazyArt itself
   }
   async function loadTrack(id, autoplay) {
     const t = lib.find((x) => x.id === id); if (!t) return;
@@ -492,7 +497,7 @@
       order = ids; orderVer++; nativeVer = ids.length === st.ids.length ? orderVer : -1; nativeLive = true; bgOn = true; repeat = st.repeat || 'None';
       cur = now; idx = ids.indexOf(curId); useNative();
       nd.sync({ pos: st.pos, dur: st.dur, playing: st.playing });
-      emitArt(); emit(); updateUpNext(); getBlob(cur).then((b) => lazyArt(cur, b)).catch(() => {});
+      emitArt(); emit(); updateUpNext(); lazyArt(cur).catch(() => {});
       return true;
     } catch { return false; }
   }

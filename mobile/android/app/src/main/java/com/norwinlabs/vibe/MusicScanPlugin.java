@@ -3,6 +3,10 @@ package com.norwinlabs.vibe;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.MediaMetadataRetriever;
+import android.util.Base64;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
@@ -41,6 +45,33 @@ public class MusicScanPlugin extends Plugin {
             JSObject o = new JSObject(); o.put("granted", false); call.resolve(o); return;
         }
         requestPermissionForAlias(alias(), call, "afterPermission");
+    }
+
+    /** MusicScan.cover({ path }) -> { data: "data:image/jpeg;base64,..." } : the song's embedded cover, read natively (fast, never loads the whole file into the web view). */
+    @PluginMethod
+    public void cover(PluginCall call) {
+        String path = call.getString("path", "");
+        JSObject o = new JSObject();
+        MediaMetadataRetriever r = new MediaMetadataRetriever();
+        try {
+            r.setDataSource(path);
+            byte[] raw = r.getEmbeddedPicture();
+            if (raw != null && raw.length > 0) {
+                BitmapFactory.Options bounds = new BitmapFactory.Options(); bounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(raw, 0, raw.length, bounds);
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inSampleSize = Math.max(1, Math.max(bounds.outWidth, bounds.outHeight) / 400);
+                Bitmap bmp = BitmapFactory.decodeByteArray(raw, 0, raw.length, opts);
+                if (bmp != null) {
+                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 82, out);
+                    o.put("data", "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                    bmp.recycle();
+                }
+            }
+        } catch (Exception ignored) {
+        } finally { try { r.release(); } catch (Exception ignored) { } }
+        call.resolve(o);
     }
 
     @PermissionCallback
