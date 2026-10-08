@@ -485,9 +485,8 @@ body.ghost .card { opacity: .62; }
 .idle .bg.on { opacity: .3; }
 .mini .idle-extra, .fullscreen .idle-extra { display: none; }
 @media (prefers-reduced-motion: no-preference) {
-  .idle .glow { animation: breathe 5s ease-in-out infinite, idlehue 20s ease-in-out infinite alternate; }
+  .idle .glow { animation: breathe 5s ease-in-out infinite; }
 }
-@keyframes idlehue { to { filter: blur(34px) hue-rotate(55deg); } }
 
 /* ================= 3D record player (Settings > Look > 3D record player) ================= */
 .tilt { position: relative; width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }

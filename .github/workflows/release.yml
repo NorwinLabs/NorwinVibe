@@ -56,6 +56,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check (syntax, element ids, unit tests)
+        run: npm run check
+
       # Updates only happen when the version goes UP, so each release gets <major>.<minor>.<run number>.
       # Change major.minor in package.json by hand for bigger releases; the patch number is automatic and never committed.
       - name: Set version

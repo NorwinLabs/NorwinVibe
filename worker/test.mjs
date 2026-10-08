@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { signLicense, verifyStripe } from './src/index.js';
+try { await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign']); } catch { console.log('skipped: this Node has no Ed25519 in WebCrypto'); process.exit(0); } // (Workers have it; very old Node does not)
 const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
 const key = await signLicense(privateKey.export({ type: 'pkcs8', format: 'pem' }), 'pro', 'cs_test_1');
 const [p, sig] = key.split('.');

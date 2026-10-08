@@ -203,6 +203,10 @@ function onState(m) {
     const now = livePos(), err = m.pos - now;
     if (Math.abs(err) < 0.4) m = { ...m, pos: now + err * 0.35 };
   }
+  for (const k of ['shuffle', 'repeat']) { // a press a moment ago: keep showing what was pressed until the app confirms it
+    const f = pendingFlag[k];
+    if (f && m.active) { if (m[k] === f.v || performance.now() > f.until) delete pendingFlag[k]; else m = { ...m, [k]: f.v }; }
+  }
   const wasPlaying = st.playing;
   st = { ...st, ...m };
   recvAt = performance.now();
@@ -265,8 +269,15 @@ el.play.onclick = () => {
 };
 el.prev.onclick = () => send('prev');
 el.next.onclick = () => send('next');
-el.shuffle.onclick = () => send(`shuffle:${st.shuffle ? 0 : 1}`);
-el.repeat.onclick = () => send(`repeat:${(st.repeatEmulated ? { None: 'Track', Track: 'None' } : { None: 'List', List: 'Track', Track: 'None' })[st.repeat] || (st.repeatEmulated ? 'Track' : 'List')}`); // browser videos only know "repeat this one"
+// shuffle / repeat answer instantly (the real state follows a moment later, and is ignored if it still shows the old value)
+const pendingFlag = {};
+const flagNow = (k, v, el2, apply) => { st[k] = v; apply(); pendingFlag[k] = { v, until: performance.now() + 1500 }; };
+el.shuffle.onclick = () => { const v = !st.shuffle; flagNow('shuffle', v, el.shuffle, () => el.shuffle.classList.toggle('on', v)); send(`shuffle:${v ? 1 : 0}`); };
+el.repeat.onclick = () => {
+  const next = (st.repeatEmulated ? { None: 'Track', Track: 'None' } : { None: 'List', List: 'Track', Track: 'None' })[st.repeat] || (st.repeatEmulated ? 'Track' : 'List'); // browser videos only know "repeat this one"
+  flagNow('repeat', next, el.repeat, () => { el.repeat.classList.toggle('on', next === 'List' || next === 'Track'); el.repeat.classList.toggle('track', next === 'Track'); });
+  send(`repeat:${next}`);
+};
 const seekTo = (s) => { s = Math.max(0, Math.min(st.dur || s, s)); st.pos = s; recvAt = performance.now(); send(`seek:${s.toFixed(2)}`); };
 
 window.addEventListener('keydown', (e) => {
@@ -335,11 +346,13 @@ async function initAudio() {
 if (window.api && !window.api.noLoopback) initAudio();
 
 let calmMode = false; // Calm mode: no spin, no moving ring (set from extras.js)
+el.viz.width = el.viz.height = Math.round(320 * Math.min(2, window.devicePixelRatio || 1)); // one canvas pixel per screen pixel, no more
 const vctx = el.viz.getContext('2d');
 let accentCache = ['#8b5cf6', '#ec4899'], accentAt = -1e9, vizRatio = 118 / 320; // vizRatio: record radius / ring canvas size
 function drawViz(t, playing) {
   const mode = document.documentElement.dataset.viz || 'bars';
-  const W = el.viz.width, c = W / 2;
+  const W = 640, c = W / 2; // everything below is drawn on a 640-unit square; the transform fits it to the canvas's real size
+  vctx.setTransform(el.viz.width / W, 0, 0, el.viz.width / W, 0, 0);
   vctx.clearRect(0, 0, W, W);
   if (mode === 'off' || calmMode) return;
   if (analyser && playing) analyser.getByteFrequencyData(freq);
@@ -368,44 +381,43 @@ function drawViz(t, playing) {
     vctx.globalAlpha = Math.min(.55, bass * .6); vctx.fillStyle = hp; vctx.beginPath(); vctx.arc(c, c, base + maxLen * (1.1 + bass), 0, Math.PI * 2); vctx.fill();
   }
 
+  // (no shadowBlur anywhere: it is by far the slowest thing a canvas can do. A wider, fainter stroke underneath gives the same glow.)
   if (mode === 'bars') {
-    vctx.strokeStyle = g; vctx.lineWidth = 8; vctx.shadowColor = a1; vctx.shadowBlur = window.FRAME_MS ? 0 : 14; // the glow is the costly part: phones and battery saver skip it
+    const glow = new Path2D(), tiers = [new Path2D(), new Path2D(), new Path2D(), new Path2D()]; // bars grouped by loudness, so a frame is a handful of strokes, not 72
     for (let i = 0; i < BARS; i++) {
-      const [x1, y1] = at(i, base), [x2, y2] = at(i, base + 2 + levels[i] * (maxLen - 2));
-      vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2);
-      vctx.globalAlpha = .4 + levels[i] * .6; vctx.stroke();
+      const [x1, y1] = at(i, base), [x2, y2] = at(i, base + 2 + levels[i] * (maxLen - 2)), p = tiers[Math.min(3, (levels[i] * 4) | 0)];
+      p.moveTo(x1, y1); p.lineTo(x2, y2); glow.moveTo(x1, y1); glow.lineTo(x2, y2);
     }
-    vctx.shadowBlur = 0;
+    vctx.strokeStyle = g; vctx.lineWidth = 18; vctx.globalAlpha = .16; vctx.stroke(glow);
+    vctx.lineWidth = 8; tiers.forEach((p, k) => { vctx.globalAlpha = .45 + k * .18; vctx.stroke(p); });
   } else if (mode === 'dots') {
-    vctx.fillStyle = g;
-    for (let i = 0; i < BARS; i++) {
-      const [x, y] = at(i, base + 6 + levels[i] * (maxLen - 8));
-      vctx.beginPath(); vctx.arc(x, y, 4 + levels[i] * 7, 0, Math.PI * 2);
-      vctx.globalAlpha = .45 + levels[i] * .55; vctx.fill();
-    }
+    const tiers = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+    for (let i = 0; i < BARS; i++) { const [x, y] = at(i, base + 6 + levels[i] * (maxLen - 8)), p = tiers[Math.min(3, (levels[i] * 4) | 0)]; p.moveTo(x + 4 + levels[i] * 7, y); p.arc(x, y, 4 + levels[i] * 7, 0, Math.PI * 2); }
+    vctx.fillStyle = g; tiers.forEach((p, k) => { vctx.globalAlpha = .5 + k * .16; vctx.fill(p); });
   } else if (mode === 'wave') {
     const pts = Array.from({ length: BARS }, (_, i) => at(i, base + 5 + levels[i] * (maxLen - 6)));
-    vctx.beginPath();
-    pts.forEach((p, i) => { const n = pts[(i + 1) % BARS], mx = (p[0] + n[0]) / 2, my = (p[1] + n[1]) / 2; if (!i) vctx.moveTo(mx, my); else vctx.quadraticCurveTo(p[0], p[1], mx, my); });
-    const f = pts[0], n = pts[1]; vctx.quadraticCurveTo(f[0], f[1], (f[0] + n[0]) / 2, (f[1] + n[1]) / 2);
-    vctx.strokeStyle = g; vctx.lineWidth = 7; vctx.shadowColor = a1; vctx.shadowBlur = window.FRAME_MS ? 0 : 14; vctx.globalAlpha = .95; vctx.stroke(); vctx.shadowBlur = 0;
-    vctx.fillStyle = g; vctx.globalAlpha = .22; vctx.fill();
+    const path = new Path2D();
+    pts.forEach((p, i) => { const n = pts[(i + 1) % BARS], mx = (p[0] + n[0]) / 2, my = (p[1] + n[1]) / 2; if (!i) path.moveTo(mx, my); else path.quadraticCurveTo(p[0], p[1], mx, my); });
+    const f = pts[0], n = pts[1]; path.quadraticCurveTo(f[0], f[1], (f[0] + n[0]) / 2, (f[1] + n[1]) / 2);
+    vctx.strokeStyle = g; vctx.lineWidth = 18; vctx.globalAlpha = .16; vctx.stroke(path);
+    vctx.lineWidth = 7; vctx.globalAlpha = .95; vctx.stroke(path);
+    vctx.fillStyle = g; vctx.globalAlpha = .22; vctx.fill(path);
   } else if (mode === 'cyber') { // twin offset neon bars (chromatic split) + a slowly turning dashed outer ring
     for (const [col, dx] of [['#05d9e8', 2.5], ['#ff2a6d', -2.5]]) {
-      vctx.strokeStyle = col; vctx.lineWidth = 3; vctx.shadowColor = col; vctx.shadowBlur = 10;
+      vctx.strokeStyle = col; vctx.lineWidth = 3;
       for (let i = 0; i < BARS; i += 2) {
         const [x1, y1] = at(i, base + 2), [x2, y2] = at(i, base + 4 + levels[i] * (maxLen - 4));
         vctx.beginPath(); vctx.moveTo(x1 + dx, y1); vctx.lineTo(x2 + dx, y2);
         vctx.globalAlpha = .55 + levels[i] * .45; vctx.stroke();
       }
     }
-    vctx.shadowBlur = 0; vctx.globalAlpha = .8; vctx.strokeStyle = '#fcee0a'; vctx.lineWidth = 2;
+    vctx.globalAlpha = .8; vctx.strokeStyle = '#fcee0a'; vctx.lineWidth = 2;
     vctx.setLineDash([3, 10]); vctx.lineDashOffset = -t / 30;
     vctx.beginPath(); vctx.arc(c, c, c - 4, 0, Math.PI * 2); vctx.stroke(); vctx.setLineDash([]);
   }
   else if (mode === 'nightcity') { // HUD-style segmented level meters: red blocks with a cyan peak, plus cyan base arcs and a glitch flicker
     const segs = 5, gap = (maxLen - 4) / segs;
-    vctx.lineWidth = 4; vctx.lineCap = 'butt'; vctx.shadowColor = '#ff2b4e'; vctx.shadowBlur = 8;
+    vctx.lineWidth = 4; vctx.lineCap = 'butt';
     for (let i = 0; i < BARS; i += 2) {
       const lit = Math.max(1, Math.round(levels[i] * segs));
       for (let k = 0; k < lit; k++) {
@@ -414,12 +426,12 @@ function drawViz(t, playing) {
         vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2); vctx.globalAlpha = .55 + (k / segs) * .45; vctx.stroke();
       }
     }
-    vctx.shadowColor = '#46f0e4'; vctx.globalAlpha = .9; vctx.strokeStyle = '#46f0e4'; vctx.lineWidth = 2;
+    vctx.globalAlpha = .9; vctx.strokeStyle = '#46f0e4'; vctx.lineWidth = 2;
     const spin = t / 4000;
     for (let q = 0; q < 4; q++) { vctx.beginPath(); vctx.arc(c, c, base + 1, spin + q * Math.PI / 2, spin + q * Math.PI / 2 + 0.9); vctx.stroke(); }
     if (Math.sin(t / 700) > 0.985) { vctx.globalAlpha = .6; vctx.strokeStyle = '#46f0e4'; vctx.lineWidth = 6; vctx.beginPath(); vctx.arc(c, c, base + 9, 0.3, 1.2); vctx.stroke(); }
   }
-  vctx.globalAlpha = 1; vctx.shadowBlur = 0;
+  vctx.globalAlpha = 1;
 }
 
 /* ---------- animation loop: record spin + progress ---------- */
@@ -449,7 +461,7 @@ el.vinyl.addEventListener('pointermove', (e) => {
 const endScratch = () => { if (!scratch) return; const p = scratch.pos; scratch = null; if (typeof ScratchFX !== 'undefined') ScratchFX.stop(); document.body.classList.remove('scratching'); seekTo(p); };
 el.vinyl.addEventListener('pointerup', endScratch);
 el.vinyl.addEventListener('pointercancel', endScratch);
-let lastDraw = 0, lastPlayingAt = 0, lastPct = '', lastCur = '', lastDurTxt = '';
+let lastDraw = 0, lastViz = 0, lastPlayingAt = 0, lastPct = '', lastCur = '', lastDurTxt = '';
 function frame(t) {
   requestAnimationFrame(frame);
   if (document.hidden) return; // nothing to see: no drawing, no battery
@@ -466,7 +478,7 @@ function frame(t) {
   vel += (target - vel) * (1 - Math.exp(-dt * (target ? 1.8 : 1.1)));
   if (!scratch || scratch.needle) { if (vel > .05) { angle = (angle + vel * dt) % 360; el.vinyl.style.transform = `rotate(${angle}deg)`; } }
 
-  if (!resting || el.viz.dataset.clean !== '1') { drawViz(t, playing); el.viz.dataset.clean = resting && !levels.some((v) => v > .01) ? '1' : ''; }
+  if ((!resting || el.viz.dataset.clean !== '1') && t - lastViz >= 22) { lastViz = t; drawViz(t, playing); el.viz.dataset.clean = resting && !levels.some((v) => v > .01) ? '1' : ''; } // the ring at ~45 fps: smooth enough, and a good chunk cheaper than 60
   if (scratch && typeof ScratchFX !== 'undefined' && performance.now() - scratch.lastAt > 70) ScratchFX.update(0); // holding the record still: the scratch goes quiet
   const scrubbing = dragging || scratch;
   const frac = dragging ? dragFrac : scratch ? scratch.pos / (st.dur || 1) : (st.dur > 0 ? livePos() / st.dur : 0);

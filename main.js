@@ -45,8 +45,20 @@ const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fa
 const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'screensaver', 'ssMin', 'obs', 'discord', 'smartshuffle']); // only settable with a Pro license
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
-const loadPrefs = () => { try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')); } catch { return {}; } };
-const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(prefs)); } catch {} };
+/* Settings are written to a temp file and renamed over the real one, keeping the previous copy as .bak, so a crash or a power
+   cut in the middle of a save can never leave a half-written (and so unreadable) settings file. */
+function writeFileSafe(file, text) {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, text);
+  try { if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`); } catch { /* the backup is a bonus */ }
+  fs.renameSync(tmp, file);
+}
+function readJsonSafe(file, fallback) {
+  for (const f of [file, `${file}.bak`]) { try { const v = JSON.parse(fs.readFileSync(f, 'utf8')); if (v && typeof v === 'object') return v; } catch { /* try the backup */ } }
+  return fallback;
+}
+const loadPrefs = () => readJsonSafe(prefsFile(), {});
+const savePrefs = () => { try { writeFileSafe(prefsFile(), JSON.stringify(prefs)); } catch (e) { console.error('[prefs]', e && e.message); } };
 
 let win, helper, tray, quitting = false, full = false, normalBounds = null;
 let prefs = {};
@@ -211,8 +223,12 @@ function createWindow() {
     frame: false, transparent: true, resizable: false, maximizable: false, fullscreenable: false,
     hasShadow: false, backgroundColor: '#00000000', alwaysOnTop: pref('pin'),
     title: 'NorwinVibe', icon: ICON,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, spellcheck: false },
   });
+  // if the page ever crashes or hangs, bring it back instead of leaving a dead window
+  win.webContents.on('render-process-gone', (_e, d) => { console.error('[window] page process gone:', d && d.reason); if (!quitting && win && !win.isDestroyed()) setTimeout(() => { try { win.webContents.reload(); } catch {} }, 500); });
+  win.on('unresponsive', () => console.error('[window] not responding'));
+  win.on('responsive', () => console.error('[window] responsive again'));
   if (pref('pin')) win.setAlwaysOnTop(true, 'screen-saver');
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.webContents.once('did-finish-load', () => { updateThumbar(false); setJumpList(); });
@@ -235,13 +251,21 @@ function createWindow() {
 }
 
 /* ---------- media helper ---------- */
+let lastHelperMsg = Date.now();
+// the media helper reports ~3 times a second; if it goes quiet for 10 s it is stuck, so restart it (the exit handler does that)
+setInterval(() => { if (helper && !quitting && Date.now() - lastHelperMsg > 10000) { console.error('[smtc] helper went quiet: restarting'); lastHelperMsg = Date.now(); try { helper.kill(); } catch {} } }, 5000);
+process.on('uncaughtException', (e) => console.error('[main] uncaught:', e && e.stack || e)); // log it; one stray error should not pop an error dialog or end the player
+process.on('unhandledRejection', (e) => console.error('[main] unhandled rejection:', e && e.stack || e));
+
 function startHelper() {
   helper = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
     '-File', path.join(__dirname, 'native', 'smtc.ps1').replace('app.asar', 'app.asar.unpacked'),
   ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 
+  lastHelperMsg = Date.now();
   readline.createInterface({ input: helper.stdout }).on('line', (line) => {
+    lastHelperMsg = Date.now();
     try {
       let msg = JSON.parse(line);
       if (msg.type === 'state') msg = emu.state(msg);
@@ -343,13 +367,13 @@ const lyricCache = new Map();
 const lyricFile = () => path.join(app.getPath('userData'), 'lyrics-cache.json');
 let lyricDisk = null, lyricSaveTimer = 0;
 const lyricDiskGet = (key) => {
-  if (!lyricDisk) { try { lyricDisk = JSON.parse(fs.readFileSync(lyricFile(), 'utf8')); } catch { lyricDisk = {}; } }
+  if (!lyricDisk) { lyricDisk = readJsonSafe(lyricFile(), {}); }
   return lyricDisk[key] || null;
 };
 const lyricDiskPut = (key, out) => {
   lyricDiskGet(key); delete lyricDisk[key]; lyricDisk[key] = out;
   const keys = Object.keys(lyricDisk); if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete lyricDisk[k];
-  clearTimeout(lyricSaveTimer); lyricSaveTimer = setTimeout(() => { try { fs.writeFileSync(lyricFile(), JSON.stringify(lyricDisk)); } catch {} }, 2000);
+  clearTimeout(lyricSaveTimer); lyricSaveTimer = setTimeout(() => { try { writeFileSafe(lyricFile(), JSON.stringify(lyricDisk)); } catch {} }, 2000);
 };
 async function getJson(url) {
   try {

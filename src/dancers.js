@@ -108,7 +108,7 @@
   }
 
   function put(cv, g2, SCs, drawFn) { // a canvas the size of (a part of) the screen, one canvas pixel = SCs screen pixels
-    const r = cv.getBoundingClientRect(); if (!r.width) return;
+    const now = performance.now(); let r = cv._r; if (!r || now - cv._rAt > 250) { r = cv._r = cv.getBoundingClientRect(); cv._rAt = now; } if (!r.width) return; // (layout is only asked about a few times a second)
     const w = Math.max(1, Math.round(r.width / SCs)), h = Math.max(1, Math.round(r.height / SCs));
     if (cv.width !== w) cv.width = w; if (cv.height !== h) cv.height = h;
     const g = cv.getContext('2d'); g.clearRect(0, 0, w, h);

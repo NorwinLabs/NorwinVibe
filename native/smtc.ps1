@@ -64,6 +64,8 @@ $vol = 0.0; $muted = $false; $tick = 0
 $lastKey = ''; $artHash = ''; $artTries = 0; $artSince = [DateTime]::UtcNow; $artNext = [DateTime]::UtcNow
 $stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput())
 $readTask = $stdin.ReadLineAsync()
+$burstUntil = [DateTime]::UtcNow            # after a button press the loop polls fast for a moment, so the app shows the result right away
+$sessCache = @(); $sessAt = [DateTime]::MinValue
 
 while ($true) {
     try {
@@ -79,6 +81,7 @@ while ($true) {
             if ($null -eq $line) { exit 0 }
             $readTask = $stdin.ReadLineAsync()
             $parts = $line.Trim().Split(':', 2)
+            $burstUntil = [DateTime]::UtcNow.AddMilliseconds(1500)
             if ($parts[0] -eq 'select') { $selected = $(if ($parts[1] -eq 'auto') { $null } else { $parts[1] }); continue }
             if ($null -eq $s -and $parts[0] -notmatch '^(volume|volstep|mute)$') { continue }
             switch ($parts[0]) {
@@ -144,10 +147,15 @@ while ($true) {
                 } catch { [Console]::Error.WriteLine("thumbnail: $($_.Exception.Message)") }
             }
 
-            $sessions = @($all | ForEach-Object {
-                $sp = $null; try { $sp = Await ($_.TryGetMediaPropertiesAsync()) $propsType } catch {}
-                @{ id = $_.SourceAppUserModelId; title = $sp.Title; artist = $sp.Artist; playing = ($_.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') }
-            })
+            # the list of other players is only refreshed every couple of seconds (it costs a round trip per player)
+            if (([DateTime]::UtcNow - $sessAt).TotalMilliseconds -gt 2500 -or $sessCache.Count -ne $all.Count) {
+                $sessCache = @($all | ForEach-Object {
+                    $sp = $null; try { $sp = Await ($_.TryGetMediaPropertiesAsync()) $propsType } catch {}
+                    @{ id = $_.SourceAppUserModelId; title = $sp.Title; artist = $sp.Artist; playing = ($_.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') }
+                })
+                $sessAt = [DateTime]::UtcNow
+            }
+            $sessions = $sessCache
             $rep = $null; if ($null -ne $info.AutoRepeatMode) { $rep = $info.AutoRepeatMode.ToString() }
             $shuf = $null; if ($null -ne $info.IsShuffleActive) { $shuf = [bool]$info.IsShuffleActive }
 
@@ -166,5 +174,8 @@ while ($true) {
     } catch {
         [Console]::Error.WriteLine($_.Exception.Message)
     }
-    Start-Sleep -Milliseconds 400
+    # wait for the next poll, but wake the moment a command arrives (it used to wait out the whole 400 ms first)
+    $wait = 400; if ([DateTime]::UtcNow -lt $burstUntil) { $wait = 90 }
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.ElapsedMilliseconds -lt $wait -and -not $readTask.IsCompleted) { Start-Sleep -Milliseconds 8 }
 }
