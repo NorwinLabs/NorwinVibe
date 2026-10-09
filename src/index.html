@@ -210,8 +210,9 @@
     <div class="sp" data-tab="about">
       <div class="about-id"><b>NorwinVibe</b><span>by Gavin Norwood</span><small id="about-ver"></small></div>
       <h4>Updates</h4>
-      <div class="act-row first"><button class="act" id="btn-update">Check for updates</button></div>
+      <div class="act-row first"><button class="act" id="btn-update">Check for updates</button><button class="act" id="btn-news">What's new</button></div>
       <p class="hint" id="update-msg"></p>
+      <div class="hint news-notes" id="update-notes"></div>
       <h4>Privacy</h4>
       <button class="sw" data-pref="stats"><span>Share anonymous usage numbers <small>a random id, the app version and your country, so the developer can count installs and active users. No songs, name, email or IP address is kept.</small></span><i></i></button>
       <h4>Backup</h4>
@@ -245,6 +246,13 @@
     <div class="act-row"><button class="act" id="st-share">Share recap picture</button></div>
     <div class="act-row"><button class="act" id="st-csv">Export CSV</button><button class="act" id="st-json">Export JSON</button></div>
     <div class="act-row"><button class="act" id="st-reset">Reset stats</button></div>
+  </div>
+
+  <!-- what's new (shown once after an update, and from Settings > About) -->
+  <div class="pop" id="pop-news">
+    <h4>What's new <small id="news-ver"></small></h4>
+    <ul class="news" id="news-list"></ul>
+    <div class="act-row"><button class="act" id="news-close">Got it</button></div>
   </div>
 
   <!-- theme store -->

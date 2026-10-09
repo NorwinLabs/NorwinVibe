@@ -34,7 +34,7 @@ for (const f of fs.readdirSync(path.join(root, 'src')).filter((n) => n.endsWith(
 }
 console.log('element ids ok');
 
-for (const t of [['lib/emulate.test.js'], ['src/lrc.test.js'], ['worker/test.mjs'], ['stats/test.mjs']]) {
+for (const t of [['lib/emulate.test.js'], ['src/lrc.test.js'], ['worker/test.mjs'], ['stats/test.mjs'], ['scripts/release-notes.test.js']]) {
   const r = spawnSync(process.execPath, t, { cwd: root, encoding: 'utf8' });
   if (r.status !== 0) fail(`${t[0]}\n${r.stdout}${r.stderr}`); else console.log(`${t[0]}: ${r.stdout.trim().split('\n').pop()}`);
 }

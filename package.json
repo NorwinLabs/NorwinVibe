@@ -32,7 +32,8 @@
       "licensing/public.pem",
       "store.config.json",
       "lib/**/*",
-      "pro.config.json"
+      "pro.config.json",
+      "RELEASE_NOTES.md"
     ],
     "asarUnpack": [
       "native/**/*"

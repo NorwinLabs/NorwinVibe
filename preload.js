@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('api', {
     info: () => ipcRenderer.invoke('dev:info'), devtools: () => ipcRenderer.send('dev:devtools'), asFree: (on) => ipcRenderer.send('dev:asfree', on),
     fakeUpdate: () => ipcRenderer.send('dev:fakeupdate'), screensaver: () => ipcRenderer.send('dev:screensaver'), signOut: () => ipcRenderer.send('dev:signout'),
   },
+  onWhatsNew: (cb) => ipcRenderer.on('whatsnew', (_e, d) => cb(d)),
+  appNotes: () => ipcRenderer.invoke('app:notes'),
   onUpdate: (cb) => ipcRenderer.on('update:status', (_e, u) => cb(u)),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),

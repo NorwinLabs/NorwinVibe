@@ -417,6 +417,20 @@ function setSleep(mins) {
 /* ---------- auto-update ----------
    Installed builds check the "desktop-latest" GitHub release (see package.json build.publish and
    .github/workflows/release.yml), download a newer installer in the background and offer a restart. */
+/* ---------- what's new ----------
+   RELEASE_NOTES.md is written at build time (scripts/release-notes.js) and packed into the app. After an update the app shows it once. */
+function readReleaseNotes() { try { return fs.readFileSync(path.join(__dirname, 'RELEASE_NOTES.md'), 'utf8').trim(); } catch { return ''; } }
+const notesText = (n) => (Array.isArray(n) ? n.map((x) => (x && x.note) || '').filter(Boolean).join('\n') : String(n || '')).trim().slice(0, 4000);
+ipcMain.handle('app:notes', () => ({ version: app.getVersion(), text: readReleaseNotes() }));
+function maybeShowWhatsNew() {
+  const v = app.getVersion(), seen = prefs.notesVersion;
+  if (seen === v) return;
+  prefs.notesVersion = v; savePrefs();
+  if (!seen) return; // the very first run: the tour covers it
+  const text = readReleaseNotes(); if (!text) return;
+  setTimeout(() => toRenderer('whatsnew', { version: v, text }), 3500);
+}
+
 let updateState = { state: 'idle' };
 function setupUpdater() {
   const testFeed = process.env.NORWINVIBE_UPDATE_URL; // for testing against a local server
@@ -432,10 +446,10 @@ function setupUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.allowDowngrade = false;
   autoUpdater.on('checking-for-update', () => push({ state: 'checking' }));
-  autoUpdater.on('update-available', (i) => push({ state: 'downloading', version: i.version, percent: 0 }));
+  autoUpdater.on('update-available', (i) => push({ state: 'downloading', version: i.version, percent: 0, notes: notesText(i.releaseNotes) }));
   autoUpdater.on('update-not-available', () => push({ state: 'none' }));
-  autoUpdater.on('download-progress', (p) => push({ state: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', (i) => push({ state: 'ready', version: i.version }));
+  autoUpdater.on('download-progress', (p) => push({ state: 'downloading', version: updateState.version, percent: Math.round(p.percent), notes: updateState.notes }));
+  autoUpdater.on('update-downloaded', (i) => push({ state: 'ready', version: i.version, notes: notesText(i.releaseNotes) || updateState.notes }));
   autoUpdater.on('error', (e) => { console.error('[update]', e && e.message); push({ state: 'error', message: String((e && e.message) || e).slice(0, 140) }); });
   function checkNow() { autoUpdater.checkForUpdates().catch((e) => console.error('[update]', e && e.message)); }
   setTimeout(checkNow, 15000);                 // shortly after launch,
@@ -457,7 +471,7 @@ function registerHotkeys() {
 }
 
 /* ---------- IPC ---------- */
-ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
+ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, notesVersion, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
 ipcMain.on('prefs:set', (_e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   for (const [k, v] of Object.entries(patch)) {
@@ -615,7 +629,7 @@ else {
         .then((src) => cb({ video: src[0], audio: 'loopback' }))
         .catch(() => cb({}));
     });
-    createWindow(); createTray(); registerHotkeys(); applyAutostart(); startHelper(); setupUpdater(); startUsageStats();
+    createWindow(); createTray(); registerHotkeys(); applyAutostart(); startHelper(); setupUpdater(); startUsageStats(); maybeShowWhatsNew();
     syncProServices(); startScreensaverWatch();
     setInterval(() => { recompute(); toRenderer('store:owned', entitlementList()); }, 60 * 60 * 1000); // lets expired keys lapse while the app stays open
   });

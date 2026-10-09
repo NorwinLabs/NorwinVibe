@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release notes are built from the commits since the last release
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -59,6 +61,11 @@ jobs:
       - name: Check (syntax, element ids, unit tests)
         run: npm run check
 
+      # "What's new": one bullet per commit since the previous release. It goes into the installer (so the app can show it after an
+      # update), the auto-update feed (latest.yml), and the release pages.
+      - name: Write the release notes
+        run: node scripts/release-notes.js RELEASE_NOTES.md
+
       # Updates only happen when the version goes UP, so each release gets <major>.<minor>.<run number>.
       # Change major.minor in package.json by hand for bigger releases; the patch number is automatic and never committed.
       - name: Set version
@@ -70,10 +77,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build installer
-        run: npm run dist
+        run: npm run dist -- "-c.releaseInfo.releaseNotes=$(cat RELEASE_NOTES.md)"   # the notes go into latest.yml, so the app can show them when the update is found
 
       - name: Name the installer for the release
         run: cp dist/NorwinVibe-Setup.exe "dist/NorwinVibe-Setup-${{ steps.version.outputs.version }}.exe"
+
+      - name: Keep the release notes for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 7
 
       - name: Keep the installer for the release job
         uses: actions/upload-artifact@v4
@@ -83,6 +97,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Describe the update feed
+        run: |
+          { echo "Files that installed copies of NorwinVibe check for updates. Download the installer from the versioned releases instead."; echo; echo "### What's new"; cat RELEASE_NOTES.md; } > FEED_BODY.md
+
       # The update feed. A fixed tag means installed apps always know where to look. Assets keep constant names, so each
       # build replaces the last. This does not depend on the Android job.
       - name: Update the rolling update feed
@@ -90,7 +108,7 @@ jobs:
         with:
           tag_name: desktop-latest
           name: Desktop update feed (do not delete)
-          body: Files that installed copies of NorwinVibe check for updates. Download the installer from the versioned releases instead.
+          body_path: FEED_BODY.md
           draft: false
           prerelease: true
           make_latest: 'false'
@@ -159,6 +177,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Write the release notes
+        run: node ../scripts/release-notes.js ../RELEASE_NOTES.md
 
       - name: Build web assets
         run: npm run build:web
@@ -241,6 +262,12 @@ jobs:
           name: windows-installer
           path: assets
 
+      - name: Download the release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: notes
+
       - name: Download the Android APK (if it was built)
         if: ${{ needs.android.result == 'success' }}
         uses: actions/download-artifact@v4
@@ -257,15 +284,23 @@ jobs:
             echo "android=**Android:** no APK in this release because the Android build did not succeed. See the workflow run." >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Write the release page
+        run: |
+          {
+            echo "**Windows:** NorwinVibe-Setup-${{ needs.windows.outputs.version }}.exe"
+            echo '${{ steps.notes.outputs.android }}'
+            echo
+            echo "### What's new"
+            cat notes/RELEASE_NOTES.md
+          } > release-body.md
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.windows.outputs.version }}
           name: NorwinVibe v${{ needs.windows.outputs.version }}
-          body: |
-            **Windows:** NorwinVibe-Setup-${{ needs.windows.outputs.version }}.exe
-            ${{ steps.notes.outputs.android }}
-          generate_release_notes: true
+          body_path: release-body.md
+          generate_release_notes: false
           draft: false
           prerelease: false
           make_latest: 'true'
