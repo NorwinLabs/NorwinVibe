@@ -5,7 +5,7 @@ let P = {};
 let pinned = true;
 
 /* ---------- panels ---------- */
-const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), eq: $('pop-eq') };
+const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), eq: $('pop-eq'), news: $('pop-news') };
 const closePops = () => Object.values(pops).forEach((p) => p && p.classList.remove('open'));
 function togglePop(name) {
   const open = !pops[name].classList.contains('open');
@@ -632,6 +632,7 @@ function showVersion(u) {
   else if (u && u.state === 'ready') { creditEl.classList.add('update'); verEl.textContent = `${window.UPDATE_VERB || 'Restart to update'} to v${u.version}`; verEl.title = window.UPDATE_TITLE || 'Install the update and relaunch'; msg = `v${u.version} is ready. ${window.UPDATE_HOWTO || 'Click the version at the bottom to restart.'}`; }
   else { verEl.textContent = v; verEl.title = 'Click to check for updates'; msg = u && u.state === 'none' ? 'You are on the latest version.' : u && u.state === 'checking' ? 'Checking for updates\u2026' : u && u.state === 'error' ? 'Could not check for updates. Will try again later.' : u && u.state === 'unsupported' ? 'Updates are checked in the installed app.' : ''; }
   const m = $('update-msg'); if (m) m.textContent = msg;
+  const nt = $('update-notes'); if (nt) nt.textContent = u && (u.state === 'ready' || u.state === 'downloading') && u.notes ? `What's in it:\n${u.notes}` : '';
 }
 prefsReady.then((p) => { appVersion = p.version || window.APP_VERSION || ''; showVersion(null); });
 if (bridge.onUpdate) {

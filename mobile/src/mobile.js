@@ -541,6 +541,13 @@
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
   });
 
+  /* what's new, once, the first launch after an update (the notes are packed into the app at build time) */
+  setTimeout(() => {
+    const v = window.APP_VERSION || '', seen = LS.get('nv.notesVer', ''); if (!v || seen === v) return;
+    LS.set('nv.notesVer', v);
+    if (seen && window.RELEASE_NOTES && typeof showWhatsNew === 'function') showWhatsNew(v, window.RELEASE_NOTES);
+  }, 3500);
+
   /* ================= anonymous usage numbers =================
      With a statsUrl in store.config.json and "Share anonymous usage numbers" on (Settings > About): a random id made up on this phone, the
      app version and "android", sent when the app opens and every few minutes while it is on screen. Nothing else. */
@@ -612,9 +619,10 @@
       for (const a of rel.assets || []) { const m = /-b(\d+)\.apk$/.exec(a.name || ''); if (m && (!best || +m[1] > best.build)) best = { build: +m[1], url: a.browser_download_url, name: a.name }; }
       if (!best || best.build <= Number(updInfo.versionCode)) { setUpd({ state: 'none' }); return upd; }
       const version = ((/Android-([\d.]+)-b\d+\.apk$/.exec(best.name) || [])[1]) || `build ${best.build}`; // the phone's own version, not the Windows release tag
-      setUpd({ state: 'downloading', version, percent: 0 });
+      const notes = String(rel.body || '').split(/###\s*What's new\s*/i)[1] || ''; // the release page lists what changed under this heading
+      setUpd({ state: 'downloading', version, percent: 0, notes: notes.trim().slice(0, 2000) });
       await updater.download({ url: best.url });
-      setUpd({ state: 'ready', version });
+      setUpd({ state: 'ready', version, notes: notes.trim().slice(0, 2000) });
     } catch { setUpd({ state: 'error' }); }
     finally { updBusy = false; }
     return upd;
@@ -671,6 +679,7 @@
     lyrics: (m) => fetchLyrics(m || {}),
     toast: () => {}, sleep: (m) => setSleep([0, 5, 10, 15, 30, 45, 60, 90, 120].includes(m) ? m : 0),
     close: () => {}, minimize: () => {}, pin: () => {}, mini: () => {}, fullscreen: () => {},
+    appNotes: async () => ({ version: window.APP_VERSION || '', text: window.RELEASE_NOTES || '' }),
     storeInfo: async () => {
       const c = storeCfg();
       return { owned: entitlementList(), restore: /^https:\/\//.test(c.restoreUrl || ''), items: Object.fromEntries(['pro', ...PACK_IDS].map((id) => [id, { name: c.items?.[id]?.name || id, price: c.items?.[id]?.price || '', hasCheckout: /^https:\/\//.test(c.items?.[id]?.checkoutUrl || '') }])) };

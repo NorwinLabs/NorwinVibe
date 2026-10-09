@@ -60,6 +60,10 @@ final class NativePlayer {
     private static int gapFailedFor = -2;
     private static long loopA = 0, loopB = 0;       // A-B repeat of part of the song (ms); loopB 0 = off
     private static float speed = 1f;                 // playback speed, below 1 while the record slows to a stop / spins up
+    // Phones only play a limited speed range cleanly (below about half speed the sound drops out), so the slowdown stops at SLOW_FLOOR and
+    // the last stretch is a volume fade instead: that keeps the "record winding down / spinning up" sound without a gap in it.
+    private static final float SLOW_FLOOR = 0.55f;
+    private static float rampGain = 1f;                  // 1 normally; falls to 0 as the record winds down and rises again as it spins up
     private static float rampFrom = 1f, rampTo = 1f; private static long rampAt = 0, rampMs = 0; private static Runnable rampDone; private static boolean ramping = false;
     private static Context ctx;
     private static final int[] EQ_FREQS = { 60, 230, 910, 3600, 14000 };
@@ -118,7 +122,7 @@ final class NativePlayer {
     private static void start(int i, boolean autoplay, long pos) {
         Item it = queue.get(i);
         releaseAll();
-        index = i; wantPlay = autoplay; startPos = pos; fadePending = false; fadeFailedFor = -2; gapFailedFor = -2; speed = 1f;
+        index = i; wantPlay = autoplay; startPos = pos; fadePending = false; fadeFailedFor = -2; gapFailedFor = -2; speed = 1f; rampGain = 1f;
         if (it.path.isEmpty()) { playing = false; trackChanged(it); return; }
         main = newDeck(it, null);
         if (main == null) { playing = false; onError(); return; }
@@ -227,10 +231,17 @@ final class NativePlayer {
         wantPlay = true;
         if (main == null && index >= 0 && index < queue.size() && !queue.get(index).path.isEmpty()) { start(index, true, 0); return; }
         if (main == null || !main.ready) return;
+        stopRamp();
+        boolean spinUp = speed < 0.99f && slowOn && Build.VERSION.SDK_INT >= 23;
+        if (spinUp) { // from a full stop: start silent so the first instant is not a burst; mid-wind-down: carry on from where the sound is
+            boolean sounding = false; try { sounding = main.mp.isPlaying(); } catch (Exception ignored) { }
+            if (!sounding) rampGain = 0f;
+            applyVolume();
+        }
+        else if (speed < 0.99f) { speed = 1f; rampGain = 1f; try { if (Build.VERSION.SDK_INT >= 23) main.mp.setPlaybackParams(new PlaybackParams().setSpeed(1f).setPitch(1f)); } catch (Exception ignored) { } }
         try { main.mp.start(); if (outgoing != null && outgoing.ready) outgoing.mp.start(); playing = true; } catch (Exception ignored) { }
         MediaPlaybackService.focus();
-        stopRamp();
-        if (speed < 0.99f) { if (slowOn && Build.VERSION.SDK_INT >= 23) startRamp(speed, 1f, 380, null); else setSpeed(1f); } // the record spins back up
+        if (spinUp) startRamp(speed, 1f, 420, null); // the record spins back up: pitch and volume rise together
         push(true);
     }
 
@@ -239,7 +250,7 @@ final class NativePlayer {
         if (outgoing != null) finishFade();
         if (slowOn && playing && main != null && main.ready && Build.VERSION.SDK_INT >= 23) { // the record winds down like a platter being switched off
             playing = false; push(true);
-            startRamp(speed, 0.12f, 420, () -> { if (!playing && main != null && main.ready) { try { main.mp.pause(); } catch (Exception ignored) { } } });
+            startRamp(speed, SLOW_FLOOR, 400, () -> { if (!playing && main != null && main.ready) { try { main.mp.pause(); } catch (Exception ignored) { } } });
             return;
         }
         if (main != null && main.ready) { try { main.mp.pause(); } catch (Exception ignored) { } }
@@ -319,7 +330,7 @@ final class NativePlayer {
     private static float level(Deck d) { return level() * (d != null ? d.rg : 1f); }
 
     private static void applyVolume() {
-        float v = level(main);
+        float v = level(main) * rampGain;
         if (outgoing == null && main != null && main.mp != null) { try { main.mp.setVolume(v, v); } catch (Exception ignored) { } }
     }
 
@@ -416,7 +427,7 @@ final class NativePlayer {
         for (int i = 0; i < queue.size(); i++) if (queue.get(i).id.equals(it.id)) { ni = i; break; }
         if (ni >= 0) index = ni;
         if (old != null) H.post(old::release);
-        errorsInRow = 0; speed = 1f;
+        errorsInRow = 0; speed = 1f; rampGain = 1f;
         applyVolume();
         trackChanged(it);
     }
@@ -447,7 +458,7 @@ final class NativePlayer {
             if (!ramping) return;
             float f = rampMs <= 0 ? 1f : Math.min(1f, (SystemClock.elapsedRealtime() - rampAt) / (float) rampMs);
             if (!setSpeed(rampFrom + (rampTo - rampFrom) * f) || f >= 1f) { ramping = false; Runnable done = rampDone; rampDone = null; if (done != null) done.run(); return; }
-            H.postDelayed(this, 30);
+            H.postDelayed(this, 45); // (each step re-tunes the audio, so a few big ones sound smoother than many tiny ones)
         }
     };
 
@@ -461,7 +472,11 @@ final class NativePlayer {
 
     /** Speed and pitch together, like a platter slowing down. Only valid while the player is playing (a non-zero speed starts it). */
     private static boolean setSpeed(float s) {
+        s = Math.max(SLOW_FLOOR, Math.min(1f, s));
         speed = s;
+        float x = (s - SLOW_FLOOR) / (1f - SLOW_FLOOR);
+        rampGain = x * x * (3f - 2f * x); // smooth fade that follows the pitch
+        applyVolume();
         if (Build.VERSION.SDK_INT < 23 || main == null || main.mp == null || !main.ready) return false;
         try { main.mp.setPlaybackParams(new PlaybackParams().setSpeed(s).setPitch(s)); return true; } catch (Exception e) { return false; }
     }

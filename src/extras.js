@@ -197,6 +197,23 @@ $('btn-share').onclick = () => shareCard('song');
 $('btn-recap').onclick = () => shareCard('recap');
 $('st-share').onclick = () => shareCard('recap');
 
+/* ---------- what's new: shown once after an update, and from Settings > About ---------- */
+function showWhatsNew(version, text) {
+  const list = $('news-list'); list.textContent = '';
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return false;
+  for (const l of lines) { const li = document.createElement('li'); li.textContent = l.replace(/^[-*]\s+/, '').replace(/^#+\s*/, ''); list.appendChild(li); }
+  $('news-ver').textContent = version ? `v${version}` : '';
+  closePops(); pops.news.classList.add('open');
+  return true;
+}
+$('news-close').onclick = () => pops.news.classList.remove('open');
+$('btn-news').onclick = async () => {
+  let n = null; try { n = bridge.appNotes ? await bridge.appNotes() : { version: appVersion, text: window.RELEASE_NOTES || '' }; } catch {}
+  if (!n || !showWhatsNew(n.version, n.text)) hud('No release notes in this build');
+};
+if (bridge.onWhatsNew) bridge.onWhatsNew((d) => { if (d && d.text) showWhatsNew(d.version, d.text); });
+
 /* ---------- first-run tour ---------- */
 const TOUR = document.body.classList.contains('mobile') ? [
   ['Your music', 'Tap the music note at the top to find the songs on your phone and build playlists.'],

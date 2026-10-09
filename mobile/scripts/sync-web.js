@@ -22,10 +22,11 @@ fs.copyFileSync(require.resolve('tweetnacl/nacl-fast.min.js'), path.join(www, 'v
 const pem = fs.readFileSync(path.join(repo, 'licensing', 'public.pem'), 'utf8').replace(/-----[^-]+-----|\s/g, '');
 const keyHex = Buffer.from(pem, 'base64').subarray(-32).toString('hex');
 const storeCfg = JSON.parse(fs.readFileSync(path.join(repo, 'store.config.json'), 'utf8'));
+let releaseNotes = ''; try { releaseNotes = fs.readFileSync(path.join(repo, 'RELEASE_NOTES.md'), 'utf8').trim(); } catch { /* local builds have none */ } // written by scripts/release-notes.js in CI
 const verProps = fs.readFileSync(path.join(mobile, 'version.properties'), 'utf8');
 const verProp = (k) => ((verProps.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1] || '').trim();
 const appVersion = `${verProp('VERSION_NAME')}.${verProp('VERSION_CODE')}`; // <major.minor>.<build>, the same as the APK's versionName
-fs.writeFileSync(path.join(www, 'config.js'), `window.APP_VERSION=${JSON.stringify(appVersion)};\nwindow.LICENSE_PUBKEY_HEX=${JSON.stringify(keyHex)};\nwindow.STORE_CONFIG=${JSON.stringify(storeCfg)};\n`);
+fs.writeFileSync(path.join(www, 'config.js'), `window.APP_VERSION=${JSON.stringify(appVersion)};\nwindow.LICENSE_PUBKEY_HEX=${JSON.stringify(keyHex)};\nwindow.STORE_CONFIG=${JSON.stringify(storeCfg)};\nwindow.RELEASE_NOTES=${JSON.stringify(releaseNotes)};\n`);
 
 // 5. index.html: the desktop page with the phone's extras injected. Every replace is asserted, so if the
 //    desktop markup changes shape the build fails loudly instead of shipping a broken phone UI.
