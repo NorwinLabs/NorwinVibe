@@ -1,0 +1,23 @@
+name = "norwinvibe-stats"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# npx wrangler d1 create norwinvibe-stats   -> paste the database_id below, then:
+# npx wrangler d1 execute norwinvibe-stats --remote --file=schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "norwinvibe-stats"
+database_id = "REPLACE_WITH_D1_ID"
+
+[vars]
+GITHUB_REPO = "NorwinLabs/NorwinVibe"      # whose release downloads to count
+FROM_EMAIL = "NorwinVibe <stats@example.com>" # a sender verified in Resend (only for the daily email)
+REPORT_EMAIL = ""                          # set to your address to get a daily summary by email; leave empty for none
+
+# a daily email at 14:00 UTC (only sent when REPORT_EMAIL is set)
+[triggers]
+crons = ["0 14 * * *"]
+
+# Secrets (npx wrangler secret put NAME):
+#   STATS_KEY        the password for the dashboard (make up a long random one)
+#   RESEND_API_KEY   re_... from resend.com (only for the daily email)

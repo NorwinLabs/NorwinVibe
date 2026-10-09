@@ -21,7 +21,7 @@ app.setAppUserModelId(APP_ID);
 const SIZES = { full: { w: 360, h: 560 }, mini: { w: 450, h: 176 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
-  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, stats: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
 const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
 const ENUMS = {
   bgart: ['cover', 'soft', 'off'],
@@ -41,7 +41,7 @@ const PAID = {
 };
 const PUBLIC_KEY = (() => { try { return fs.readFileSync(path.join(__dirname, 'licensing', 'public.pem')); } catch { return null; } })();
 const storeCfg = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { return { items: {} }; } };
-const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle', 'deck3d', 'dancers', 'scratchfx', 'deckmove'];
+const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle', 'stats', 'deck3d', 'dancers', 'scratchfx', 'deckmove'];
 const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'screensaver', 'ssMin', 'obs', 'discord', 'smartshuffle']); // only settable with a Pro license
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
@@ -457,7 +457,7 @@ function registerHotkeys() {
 }
 
 /* ---------- IPC ---------- */
-ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
+ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
 ipcMain.on('prefs:set', (_e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   for (const [k, v] of Object.entries(patch)) {
@@ -584,6 +584,22 @@ ipcMain.on('win:fullscreen', (_e, on) => {
   }
 });
 
+/* ---------- anonymous usage numbers ----------
+   When store.config.json has a statsUrl, and "Share anonymous usage numbers" is on (Settings > About), the app says hello when it starts
+   and every few minutes while it runs: a random id made up on this PC, the version and "win". That is all. The service counts installs,
+   people online now, and daily / weekly / monthly active users (see /stats in this repository). */
+function startUsageStats() {
+  const url = String(storeCfg().statsUrl || '');
+  if (!/^https:\/\//.test(url)) return;
+  if (!prefs.installId) { prefs.installId = require('crypto').randomUUID(); savePrefs(); }
+  const send = (e) => {
+    if (!pref('stats') || quitting) return;
+    net.fetch(url.replace(/\/$/, '') + '/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: prefs.installId, v: app.getVersion(), p: 'win', e }) }).catch(() => {}); // fire and forget: never in the way
+  };
+  setTimeout(() => send('open'), 5000);
+  setInterval(() => send('beat'), 5 * 60 * 1000);
+}
+
 /* ---------- lifecycle ---------- */
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -599,7 +615,7 @@ else {
         .then((src) => cb({ video: src[0], audio: 'loopback' }))
         .catch(() => cb({}));
     });
-    createWindow(); createTray(); registerHotkeys(); applyAutostart(); startHelper(); setupUpdater();
+    createWindow(); createTray(); registerHotkeys(); applyAutostart(); startHelper(); setupUpdater(); startUsageStats();
     syncProServices(); startScreensaverWatch();
     setInterval(() => { recompute(); toRenderer('store:owned', entitlementList()); }, 60 * 60 * 1000); // lets expired keys lapse while the app stays open
   });

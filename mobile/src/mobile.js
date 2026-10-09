@@ -15,7 +15,7 @@
   const toast = (t) => { if (typeof hud === 'function') hud(t); };
 
   /* ================= preferences & store (mirrors main.js) ================= */
-  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
+  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', stats: true, replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
   const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
   const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'smartshuffle']); // only settable with a Pro license (desktop-only Pro switches are not offered here)
   const ENUMS = {
@@ -540,6 +540,19 @@
     else if (a === 'unduck') { if (duckVol) { setVol(duckVol); duckVol = 0; } }
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
   });
+
+  /* ================= anonymous usage numbers =================
+     With a statsUrl in store.config.json and "Share anonymous usage numbers" on (Settings > About): a random id made up on this phone, the
+     app version and "android", sent when the app opens and every few minutes while it is on screen. Nothing else. */
+  function usageStats() {
+    const url = String(storeCfg().statsUrl || ''); if (!/^https:\/\//.test(url)) return;
+    let id = LS.get('nv.installId', ''); if (!id) { id = crypto.randomUUID ? crypto.randomUUID() : ''; if (id) LS.set('nv.installId', id); } if (!id) return;
+    const send = (e) => { if (prefs.stats === false || document.hidden) return; fetch(url.replace(/\/$/, '') + '/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, v: window.APP_VERSION || '', p: 'android', e }) }).catch(() => {}); };
+    setTimeout(() => send('open'), 6000);
+    setInterval(() => send('beat'), 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) send('beat'); });
+  }
+  setTimeout(usageStats, 0); // (after the rest of this file has set up what it reads)
 
   /* ================= lyrics (LRCLIB; CapacitorHttp makes fetch bypass CORS) ================= */
   const lyricCache = new Map();
