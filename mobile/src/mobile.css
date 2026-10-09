@@ -1,7 +1,12 @@
 /* Phone layout: the desktop card becomes a full-screen portrait player. Loaded after features.css. */
+/* the real values come from MainActivity (they are the status bar, cut-out and navigation bar sizes); env() is the fallback */
+:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
 html { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #0c0c12; }
 body.mobile { padding: 0; height: 100%; }
-.mobile .card { border-radius: 0; box-shadow: none; clip-path: none; animation: none; padding: 12px 20px calc(18px + env(safe-area-inset-bottom, 0px)); }
+.mobile .card { border-radius: 0; box-shadow: none; clip-path: none; animation: none; padding: calc(12px + var(--sat)) calc(20px + var(--sar)) calc(18px + var(--sab)) calc(20px + var(--sal)); } /* the card fills the whole screen, behind the system bars */
+.mobile .hud { top: calc(62px + var(--sat)); }
+.mobile .tour { padding-bottom: calc(56px + var(--sab)); }
+.mobile .credit { bottom: calc(5px + var(--sab)); }
 
 /* things that only make sense with a mouse / a desktop window */
 .mobile #btn-mini, .mobile #btn-close, .mobile #btn-minimize, .mobile #btn-full, .mobile #btn-tray, .mobile #sw-pin, .mobile .hint,
@@ -31,7 +36,7 @@ body.mobile { padding: 0; height: 100%; }
 .mobile .controls { margin-top: 10px; gap: 4px; }
 
 /* panels become bottom-friendly sheets */
-.mobile .card > .pop { left: 12px; right: 12px; top: 56px; width: auto; max-height: calc(100% - 76px); }
+.mobile .card > .pop { left: 12px; right: 12px; top: calc(56px + var(--sat)); width: auto; max-height: calc(100% - 76px - var(--sat) - var(--sab)); }
 .mobile .chips button, .mobile .act { padding: 10px 6px; }
 .mobile .sw { padding: 11px 4px; }
 
@@ -53,10 +58,10 @@ body.mobile { padding: 0; height: 100%; }
 .mobile .card.idle .lyric { display: none; }
 
 /* mini player */
-#mini-player { display: none; position: absolute; z-index: 8; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); height: 58px; padding: 0 6px 0 8px; align-items: center; gap: 2px; overflow: hidden;
+#mini-player { display: none; position: absolute; z-index: 8; left: 10px; right: 10px; bottom: calc(10px + var(--sab)); height: 58px; padding: 0 6px 0 8px; align-items: center; gap: 2px; overflow: hidden;
   border-radius: 16px; background: rgba(18,18,28,.94); box-shadow: 0 6px 24px rgba(0,0,0,.5); outline: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(14px); }
 .card:not(.idle):has(.pop.open) #mini-player { display: flex; }
-.card:not(.idle):has(.pop.open) > .pop { max-height: calc(100% - 156px); }
+.card:not(.idle):has(.pop.open) > .pop { max-height: calc(100% - 156px - var(--sat) - var(--sab)); }
 .mp-info { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; height: 100%; cursor: pointer; }
 .mp-art { flex: none; width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)) center / cover; }
 .mp-tx { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -91,7 +96,7 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
 @media (orientation: landscape) {
   .mobile .card { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); grid-template-rows: auto minmax(0, 1fr) auto auto auto minmax(0, 1fr);
     grid-template-areas: "top top" "stage ." "stage meta" "stage progress" "stage controls" "stage .";
-    column-gap: 20px; padding: 4px max(20px, env(safe-area-inset-right, 0px)) 6px max(20px, env(safe-area-inset-left, 0px)); }
+    column-gap: 20px; padding: calc(4px + var(--sat)) max(20px, var(--sar)) calc(6px + var(--sab)) max(20px, var(--sal)); }
   .mobile .top { grid-area: top; height: 36px; }
   .mobile .stage { grid-area: stage; align-self: center; }
   .mobile .meta { grid-area: meta; }
@@ -104,9 +109,9 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
   .mobile .card.idle #btn-add-cta { margin-top: 8px; }
   #lib-list { max-height: calc(100vh - 210px); }
   #mini-player { left: auto; right: 12px; width: min(420px, 50%); }
-  .mobile .card > .pop { left: auto; right: 12px; width: min(460px, 62%); top: 44px; max-height: calc(100% - 56px); }
+  .mobile .card > .pop { left: auto; right: calc(12px + var(--sar)); width: min(460px, 62%); top: calc(44px + var(--sat)); max-height: calc(100% - 56px - var(--sat) - var(--sab)); }
   .card:not(.idle):has(.pop.open) #mini-player { display: none; } /* the player is already visible beside the panel */
-  .card:not(.idle):has(.pop.open) > .pop { max-height: calc(100% - 56px); }
+  .card:not(.idle):has(.pop.open) > .pop { max-height: calc(100% - 56px - var(--sat) - var(--sab)); }
 }
 
 /* ---------- car mode: big targets, big text ---------- */

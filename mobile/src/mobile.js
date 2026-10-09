@@ -910,7 +910,7 @@
   document.addEventListener('DOMContentLoaded', () => {}); // (scripts load at the end of <body>, so the DOM is already there)
   const card = $('card');
   card.addEventListener('dblclick', (e) => e.stopImmediatePropagation(), true); // no mini mode on a phone
-  const status = plugin('StatusBar'); if (status) { status.setBackgroundColor?.({ color: '#0c0c12' }).catch(() => {}); status.setStyle?.({ style: 'DARK' }).catch(() => {}); }
+  // (the status and navigation bars are transparent and drawn over the player by MainActivity; nothing to set here)
   const app = plugin('App');
   if (app && app.addListener) app.addListener('appStateChange', (st) => { if (st && st.isActive) scanPhone(false); }); // pick up songs added while the app was in the background
   if (app && app.addListener) app.addListener('backButton', () => { // close panels / leave ambient first, otherwise send the app to the background (music keeps playing)

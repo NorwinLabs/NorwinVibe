@@ -499,8 +499,8 @@ html[data-deck="3d"] .deck-shadow { display: block; }
 .plinth { position: absolute; left: 50%; top: 50%; width: 292px; height: 258px; margin: -129px 0 0 -146px; transform-style: preserve-3d;
   opacity: var(--deck, 0); transform: translateZ(calc((var(--deck, 0) - 1) * 70px)); pointer-events: none; }
 .plinth .pf { position: absolute; display: block; }
-.plinth .pf-t { inset: 0; border-radius: 12px; background: linear-gradient(160deg, #3a3a46, #1d1d26 55%, #14141a); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 26px rgba(0,0,0,.55); }
-.plinth .pf-f { left: 0; top: 100%; width: 100%; height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 10px 10px; background: linear-gradient(#2a2a33, #0c0c10); }
+.plinth .pf-t { inset: 0; border-radius: 2px; background: linear-gradient(160deg, #3a3a46, #1d1d26 55%, #14141a); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 26px rgba(0,0,0,.55); }
+.plinth .pf-f { left: 0; top: 100%; width: 100%; height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 2px 2px; background: linear-gradient(#2a2a33, #0c0c10); }
 .plinth .pf-r { left: 100%; top: 0; width: 38px; height: 100%; transform-origin: 0 50%; transform: rotateY(90deg); background: linear-gradient(90deg, #22222b, #0a0a0e); }
 .plinth .pf-l { right: 100%; top: 0; width: 38px; height: 100%; transform-origin: 100% 50%; transform: rotateY(-90deg); background: linear-gradient(270deg, #22222b, #0a0a0e); }
 .plinth .platter { left: 50%; top: 50%; width: 252px; height: 252px; margin: -126px 0 0 calc(-126px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(7px);
@@ -565,3 +565,22 @@ body:not(.mobile) .phone-only { display: none !important; }
 
 /* full screen and ambient: the window covers the screen and must not be draggable */
 .fullscreen .card, .fullscreen .top { -webkit-app-region: no-drag !important; cursor: auto; }
+
+/* tap a synced lyric line to jump to it */
+.ln:not(.plain) { cursor: pointer; -webkit-app-region: no-drag; }
+.ln:not(.plain):hover { opacity: .75; }
+
+/* turntable skins and the dust cover */
+.plinth .pf-lid { left: 0; top: 0; width: 100%; height: 100%; border-radius: 2px; transform-origin: 50% 0; transform: translateZ(44px) rotateX(0deg); transition: transform 1.2s var(--ease);
+  background: linear-gradient(160deg, rgba(190,210,235,.16), rgba(120,140,170,.07)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 0 14px rgba(180,200,235,.15); pointer-events: none; }
+.playing .plinth .pf-lid { transform: translateZ(44px) rotateX(104deg); } /* the lid swings up and back when the music starts */
+html[data-deckskin="wood"] .plinth .pf-t { background: repeating-linear-gradient(90deg, rgba(0,0,0,.09) 0 2px, transparent 2px 9px), linear-gradient(160deg, #a4713f, #6e4524 60%, #4b2d15); box-shadow: inset 0 0 0 1px rgba(255,220,170,.25), inset 0 0 26px rgba(40,18,4,.5); }
+html[data-deckskin="wood"] .plinth .pf-f, html[data-deckskin="wood"] .plinth .pf-r, html[data-deckskin="wood"] .plinth .pf-l { background: linear-gradient(#7a4d28, #321c0c); }
+html[data-deckskin="wood"] .plinth .platter { background: radial-gradient(circle, #cfcfd8 0 8%, #8a8a95 9% 70%, #d6d6de 71% 74%, #3a3a42 75%); }
+html[data-deckskin="neon"] .plinth .pf-t { background: linear-gradient(160deg, #1a1030, #0a0714); box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 24px var(--accent); }
+html[data-deckskin="neon"] .plinth .pf-f, html[data-deckskin="neon"] .plinth .pf-r, html[data-deckskin="neon"] .plinth .pf-l { background: linear-gradient(color-mix(in srgb, var(--accent) 55%, #000), #05030a); box-shadow: 0 0 12px var(--accent); }
+html[data-deckskin="neon"] .plinth .platter { background: radial-gradient(circle, #fff 0 8%, #2a1a4a 9% 70%, var(--accent-2) 71% 74%, #120a22 75%); box-shadow: 0 0 16px var(--accent-2); }
+
+/* the turntable body is a plain box: sharp, matching corners (rounded ones left gaps where the faces meet at the front) */
+.plinth .pf-t { box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 26px rgba(0,0,0,.55); }
+.plinth .pf { backface-visibility: hidden; }
