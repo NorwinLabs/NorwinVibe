@@ -327,20 +327,27 @@ const armEl = $('arm'), armBase = armEl.querySelector('.arm-base'), tipEl = armE
 const R_OUT = 110, R_IN = 50; // stylus distance from the record centre at the first / last groove (record radius is 118)
 const REST_DEG = -4;          // parked position beside the record
 let armTip = [4.2, 173.7];    // stylus position relative to the pivot, unrotated (px); re-measured from the live DOM
-let armRange = null, armRangeAt = 0, armAngle = REST_DEG, armLast = 0;
+let armPivot = [0, 0], armRange = null, armRangeAt = 0, armAngle = REST_DEG, armLast = 0;
 
 function measureArm() { // the arm maths needs the flat layout, so look at it flat for a moment (nothing is painted in between)
   if (deckBusy) return;
   const flat = root.dataset.deck === '3d';
   if (!flat) return measureArmFlat();
-  const keep = [tiltEl.style.transform, stageEl.style.perspective];
+  const keep = [tiltEl.style.transform, stageEl.style.perspective], pf = document.querySelector('.plinth .pf-t');
   tiltEl.style.transform = 'none'; stageEl.style.perspective = 'none';
-  try { measureArmFlat(); } finally { tiltEl.style.transform = keep[0]; stageEl.style.perspective = keep[1]; }
+  try {
+    root.style.setProperty('--ex-t', '0px'); root.style.setProperty('--ex-r', '0px');
+    const pr = pf.getBoundingClientRect(); measureArmFlat();
+    // the turntable grows toward the arm's pivot so the arm stands on the deck instead of floating beside it
+    const s = wrapEl.getBoundingClientRect().width / 236 || 1;
+    root.style.setProperty('--ex-t', Math.max(0, (pr.top - (armPivot[1] - 26 * s)) / s).toFixed(1) + 'px');
+    root.style.setProperty('--ex-r', Math.max(0, Math.min(((armPivot[0] + 20 * s) - pr.right) / s, (stageEl.getBoundingClientRect().right - 18 * s - pr.right) / s)).toFixed(1) + 'px');
+  } finally { tiltEl.style.transform = keep[0]; stageEl.style.perspective = keep[1]; }
 }
 function measureArmFlat() {
   const w = wrapEl.getBoundingClientRect(), b = armBase.getBoundingClientRect(), tp = tipEl.getBoundingClientRect();
   if (!w.width) return;
-  const s = w.width / 236, cx = w.left + w.width / 2, cy = w.top + w.height / 2, px = b.left + b.width / 2, py = b.top + b.height / 2;
+  const s = w.width / 236, cx = w.left + w.width / 2, cy = w.top + w.height / 2, px = b.left + b.width / 2, py = b.top + b.height / 2; armPivot = [px, py];
   // calibrate the stylus offset from the real element: undo the arm's current rotation
   const eff = armAngle + liftPos * 1.6, sc = 1 + liftPos * 0.035; // the lift adds a little rotation and scale; undo both too
   const vx = (tp.left - px) / s / sc, vy = (tp.top - py) / s / sc, ca = Math.cos(-eff * Math.PI / 180), sa = Math.sin(-eff * Math.PI / 180);

@@ -499,10 +499,10 @@ html[data-deck="3d"] .deck-shadow { display: block; }
 .plinth { position: absolute; left: 50%; top: 50%; width: 292px; height: 258px; margin: -129px 0 0 -146px; transform-style: preserve-3d;
   opacity: var(--deck, 0); transform: translateZ(calc((var(--deck, 0) - 1) * 70px)); pointer-events: none; }
 .plinth .pf { position: absolute; display: block; }
-.plinth .pf-t { inset: 0; border-radius: 2px; background: linear-gradient(160deg, #3a3a46, #1d1d26 55%, #14141a); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 26px rgba(0,0,0,.55); }
-.plinth .pf-f { left: 0; top: 100%; width: 100%; height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 2px 2px; background: linear-gradient(#2a2a33, #0c0c10); }
-.plinth .pf-r { left: 100%; top: 0; width: 38px; height: 100%; transform-origin: 0 50%; transform: rotateY(90deg); background: linear-gradient(90deg, #22222b, #0a0a0e); }
-.plinth .pf-l { right: 100%; top: 0; width: 38px; height: 100%; transform-origin: 100% 50%; transform: rotateY(-90deg); background: linear-gradient(270deg, #22222b, #0a0a0e); }
+.plinth .pf-t { left: 0; bottom: 0; top: calc(var(--ex-t, 0px) * -1); right: calc(var(--ex-r, 0px) * -1); border-radius: 2px; background: linear-gradient(160deg, #3a3a46, #1d1d26 55%, #14141a); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 26px rgba(0,0,0,.55); }
+.plinth .pf-f { left: 0; top: 100%; width: calc(100% + var(--ex-r, 0px)); height: 38px; transform-origin: 50% 0; transform: rotateX(-90deg); border-radius: 0 0 2px 2px; background: linear-gradient(#2a2a33, #0c0c10); }
+.plinth .pf-r { left: calc(100% + var(--ex-r, 0px)); top: calc(var(--ex-t, 0px) * -1); width: 38px; height: calc(100% + var(--ex-t, 0px)); transform-origin: 0 50%; transform: rotateY(90deg); background: linear-gradient(90deg, #22222b, #0a0a0e); }
+.plinth .pf-l { right: 100%; top: calc(var(--ex-t, 0px) * -1); width: 38px; height: calc(100% + var(--ex-t, 0px)); transform-origin: 100% 50%; transform: rotateY(-90deg); background: linear-gradient(270deg, #22222b, #0a0a0e); }
 .plinth .platter { left: 50%; top: 50%; width: 252px; height: 252px; margin: -126px 0 0 calc(-126px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(7px);
   background: radial-gradient(circle, #8d8d99 0 8%, #55555f 9% 70%, #9a9aa6 71% 74%, #2a2a31 75%); box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 6px 14px rgba(0,0,0,.6); }
 .plinth .dknob { left: 16px; bottom: 16px; width: 34px; height: 34px; border-radius: 50%; transform: translateZ(4px); background: radial-gradient(circle at 35% 30%, #e6e6ee, #6b6b78 70%); box-shadow: 0 3px 6px rgba(0,0,0,.6); }
@@ -511,7 +511,7 @@ html[data-deck="3d"] .deck-shadow { display: block; }
 .deck-shadow { position: absolute; left: 50%; bottom: 14px; width: 270px; height: 40px; margin-left: -135px; border-radius: 50%; background: rgba(0,0,0,.55); filter: blur(16px); opacity: var(--deck, 0); pointer-events: none; }
 html[data-deck="3d"] body:not(.mini) .vinyl-wrap { transform: translate3d(var(--sx, -14px), 0, 16px); animation: none; }
 html[data-deck="3d"] body:not(.mini) .swap .vinyl-wrap { transform: translate3d(var(--sx, -14px), 0, 22px); }
-html[data-deck="3d"] body:not(.mini) .armz { transform: translateZ(calc(var(--deck, 1) * 26px)); }
+html[data-deck="3d"] body:not(.mini) .armz { transform: translateZ(calc(var(--deck, 1) * 30px)); }
 html[data-deck="3d"] body:not(.mini) .tilt { --deck: 1; }
 .deck-anim .vinyl-wrap { transition: none !important; animation: none !important; }
 html.deck-anim .glow { opacity: 0 !important; }
@@ -548,14 +548,14 @@ html[data-deck="3d"] body:not(.mini) .viz { transform: scale(.84); }
 .plinth .ax-b { transform: translateZ(8px) rotateZ(90deg) rotateX(-90deg); }
 .plinth .ax-cap { width: 10px; height: 10px; margin: -5px 0 0 calc(-5px + var(--sx, -14px)); border-radius: 50%; transform: translateZ(32px); background: radial-gradient(circle at 35% 30%, #ffffff, #9a9aa6 75%); box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 html[data-deck="3d"] body:not(.mini) .arm { transform-style: preserve-3d; filter: none; }
-/* a pillar under the pivot, a tube-like arm raised above the deck, and a head that drops into the groove when the song plays */
-html[data-deck="3d"] body:not(.mini) .arm-base { transform-style: preserve-3d; transform: translateZ(4px); }
-html[data-deck="3d"] body:not(.mini) .arm-base::before, html[data-deck="3d"] body:not(.mini) .arm-base::after { content: ""; position: absolute; left: 4px; top: 50%; width: 24px; height: 24px; margin-top: -24px; border-radius: 0; transform-origin: 50% 100%; background: linear-gradient(90deg, #6d6d7a, #e8e8f0 45%, #55555f); box-shadow: none; }
-html[data-deck="3d"] body:not(.mini) .arm-base::before { transform: translateZ(4px) rotateX(-90deg) translateY(24px); }
-html[data-deck="3d"] body:not(.mini) .arm-base::after { transform: translateZ(4px) rotateZ(90deg) rotateX(-90deg) translateY(24px); }
-html[data-deck="3d"] body:not(.mini) .arm-rod { transform-style: preserve-3d; transform: translateZ(26px); box-shadow: 0 5px 6px rgba(0,0,0,.35); }
+/* a pillar standing on the deck under the pivot, a tube-like arm that slopes gently down to the record, and a head that drops into the groove */
+html[data-deck="3d"] body:not(.mini) .arm-base { transform-style: preserve-3d; transform: translateZ(1px); }
+html[data-deck="3d"] body:not(.mini) .arm-base::before, html[data-deck="3d"] body:not(.mini) .arm-base::after { content: ""; position: absolute; left: 7px; top: 50%; width: 18px; height: 30px; margin: 0; border-radius: 0; transform-origin: 50% 0; background: linear-gradient(90deg, #5a5a66, #e8e8f0 45%, #4a4a54); box-shadow: none; }
+html[data-deck="3d"] body:not(.mini) .arm-base::before { transform: rotateX(-90deg); }
+html[data-deck="3d"] body:not(.mini) .arm-base::after { transform: rotateZ(90deg) rotateX(-90deg); }
+html[data-deck="3d"] body:not(.mini) .arm-rod { transform-style: preserve-3d; transform-origin: 50% 0; transform: translateZ(4px) rotateX(-4.2deg); box-shadow: none; }
 html[data-deck="3d"] body:not(.mini) .arm-rod::after { content: ""; position: absolute; inset: 0; background: inherit; border-radius: inherit; transform: rotateY(90deg); }
-html[data-deck="3d"] body:not(.mini) .arm-head { transform-style: preserve-3d; transform: translateZ(calc(20px + var(--lift, 0) * 10px)) rotate(-8deg); }
+html[data-deck="3d"] body:not(.mini) .arm-head { transform-style: preserve-3d; transform: translateZ(calc(-11px + var(--lift, 0) * 13px)) rotate(-8deg); }
 
 body:not(.mobile) .phone-only { display: none !important; }
 
