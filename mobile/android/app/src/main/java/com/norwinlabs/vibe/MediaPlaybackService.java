@@ -130,13 +130,6 @@ public class MediaPlaybackService extends Service {
         if (session == null) {
             session = new MediaSession(appCtx, "NorwinVibe");
             session.setCallback(new MediaSession.Callback() {
-                @Override public boolean onMediaButtonEvent(Intent i) {
-                    // A Bluetooth device connecting (or a car starting) sends a bare PLAY key: that must not wake up a player that has been
-                    // paused for a while. Real headset buttons (play / pause) and the lock screen / notification buttons still work.
-                    android.view.KeyEvent k = i == null ? null : (android.view.KeyEvent) i.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                    if (k != null && k.getKeyCode() == android.view.KeyEvent.KEYCODE_MEDIA_PLAY && !lastPlaying && System.currentTimeMillis() - lastPlayAt > 120000) return true;
-                    return super.onMediaButtonEvent(i);
-                }
                 @Override public void onPlay() { command("play", 0); }
                 @Override public void onPause() { command("pause", 0); }
                 @Override public void onSkipToNext() { command("next", 0); }
