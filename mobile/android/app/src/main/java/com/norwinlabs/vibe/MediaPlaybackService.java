@@ -116,7 +116,7 @@ public class MediaPlaybackService extends Service {
     private static volatile long lastPlayAt = 0;
     /** Remembers whether we are playing and when we last were; a pause the user chose cancels any pending "resume after the interruption". */
     private static void noteState(boolean playing) {
-        if (playing) lastPlayAt = System.currentTimeMillis();
+        if (playing || lastPlaying) lastPlayAt = System.currentTimeMillis(); // (also the moment it stops: "paused for a while" counts from the pause)
         lastPlaying = playing;
         MediaPlaybackService i = inst;
         if (i != null && (playing || System.currentTimeMillis() - i.focusPauseAt > 1500)) i.pausedByFocus = false;
