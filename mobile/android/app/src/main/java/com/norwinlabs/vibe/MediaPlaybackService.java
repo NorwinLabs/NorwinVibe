@@ -112,6 +112,15 @@ public class MediaPlaybackService extends Service {
     }
 
     private static MediaPlaybackService inst;
+    private static volatile boolean lastPlaying = false;
+    private static volatile long lastPlayAt = 0;
+    /** Remembers whether we are playing and when we last were; a pause the user chose cancels any pending "resume after the interruption". */
+    private static void noteState(boolean playing) {
+        if (playing) lastPlayAt = System.currentTimeMillis();
+        lastPlaying = playing;
+        MediaPlaybackService i = inst;
+        if (i != null && (playing || System.currentTimeMillis() - i.focusPauseAt > 1500)) i.pausedByFocus = false;
+    }
     /** The native player is about to make sound: take audio focus (and watch for headphones being unplugged). */
     static void focus() { if (inst != null) inst.takeFocus(); }
 
@@ -121,6 +130,13 @@ public class MediaPlaybackService extends Service {
         if (session == null) {
             session = new MediaSession(appCtx, "NorwinVibe");
             session.setCallback(new MediaSession.Callback() {
+                @Override public boolean onMediaButtonEvent(Intent i) {
+                    // A Bluetooth device connecting (or a car starting) sends a bare PLAY key: that must not wake up a player that has been
+                    // paused for a while. Real headset buttons (play / pause) and the lock screen / notification buttons still work.
+                    android.view.KeyEvent k = i == null ? null : (android.view.KeyEvent) i.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                    if (k != null && k.getKeyCode() == android.view.KeyEvent.KEYCODE_MEDIA_PLAY && !lastPlaying && System.currentTimeMillis() - lastPlayAt > 120000) return true;
+                    return super.onMediaButtonEvent(i);
+                }
                 @Override public void onPlay() { command("play", 0); }
                 @Override public void onPause() { command("pause", 0); }
                 @Override public void onSkipToNext() { command("next", 0); }
@@ -198,6 +214,7 @@ public class MediaPlaybackService extends Service {
 
     /** Refreshes the notification, session and widget (track change, play / pause, seek) without restarting the service. */
     static void update(Context ctx, Params p) {
+        noteState(p.playing);
         Notification n = apply(ctx, p);
         if (running) setWake(ctx, p.playing);
         if (running) ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, n);
@@ -212,6 +229,8 @@ public class MediaPlaybackService extends Service {
     /* Headphones unplugged / Bluetooth dropped: pause instead of blasting the speaker.
        Calls and other apps: pause (or lower the volume) while they speak, then carry on. */
     private boolean pausedByFocus = false, ducked = false, focusHeld = false;
+    private long focusPauseAt = 0;
+    private boolean focusPauseCall = false;
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) command("pause", 0);
@@ -219,14 +238,19 @@ public class MediaPlaybackService extends Service {
     };
     private final AudioManager.OnAudioFocusChangeListener focusListener = (change) -> {
         switch (change) {
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                pausedByFocus = true; command("pause", 0); break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT: {
+                if (!lastPlaying) break; // not playing: there is nothing to pause, and nothing to resume afterwards
+                AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                focusPauseCall = am != null && am.getMode() != AudioManager.MODE_NORMAL; // a phone call: worth resuming after, however long it was
+                pausedByFocus = true; focusPauseAt = System.currentTimeMillis(); command("pause", 0); break;
+            }
             case AudioManager.AUDIOFOCUS_LOSS:
                 pausedByFocus = false; command("pause", 0); break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                 ducked = true; command("duck", 0); break;
             case AudioManager.AUDIOFOCUS_GAIN:
-                if (pausedByFocus) { pausedByFocus = false; command("play", 0); }
+                // Resume after a short blip (a notification, a navigation prompt) or a call. An alarm or a long interruption: stay paused.
+                if (pausedByFocus) { pausedByFocus = false; if (focusPauseCall || System.currentTimeMillis() - focusPauseAt < 20000) command("play", 0); }
                 if (ducked) { ducked = false; command("unduck", 0); }
                 break;
             default: break;
@@ -237,7 +261,11 @@ public class MediaPlaybackService extends Service {
     private void takeFocus() {
         if (focusHeld) return;
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am != null) focusHeld = am.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        if (am != null) {
+            int r = am.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            focusHeld = r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            if (r == AudioManager.AUDIOFOCUS_REQUEST_FAILED) command("pause", 0); // an alarm or a call has the speaker: do not play over (or silently under) it
+        }
         try { registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)); } catch (Exception ignored) { }
     }
 
@@ -263,6 +291,7 @@ public class MediaPlaybackService extends Service {
             p.duration = intent.getLongExtra("duration", 0);
         }
         ensureChannel(this);
+        noteState(p.playing);
         Notification n = apply(this, p);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTIFICATION_ID, n);
