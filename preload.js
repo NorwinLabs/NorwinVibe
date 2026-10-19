@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   prefs: () => ipcRenderer.invoke('prefs:get'),
   setPrefs: (p) => ipcRenderer.send('prefs:set', p),
   lyrics: (m) => ipcRenderer.invoke('lyrics:get', m),
+  chapters: (m) => ipcRenderer.invoke('chapters:find', m),
   toast: (t) => ipcRenderer.send('toast', t),
   sleep: (mins) => ipcRenderer.send('sleep:set', mins),
   close: () => ipcRenderer.send('win:close'),

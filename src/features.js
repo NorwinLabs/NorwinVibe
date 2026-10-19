@@ -436,15 +436,16 @@ $('loop-b').onclick = () => { if (!st.active || abLoop.a === null) { hud('Set A 
 $('loop-clear').onclick = () => { abLoop.a = abLoop.b = null; loopUi(); hud('Loop cleared'); };
 function featFrame(t, pos) {
   updateArm(t, pos);
+  if (chap) chapFrame(pos);
   if (st.active && st.playing) {
     if (abLoop.b !== null && pos >= abLoop.b && t - abLoop.at > 700) { abLoop.at = t; seekTo(abLoop.a); }
     if (sleepSong && st.dur > 3 && pos >= st.dur - 0.7) { sleepSong = false; send('pause'); updateSleep(0); hud('Paused at the end of the song'); }
   }
   if (!lyr.synced) { // plain lyrics have no timing: in full screen, scroll them along with the song's progress
-    if (mode === 'full' && lyr.lines.length && st.dur > 0 && t - (lyr.scrollAt || 0) > 250) { lyr.scrollAt = t; lyricsBox.scrollTo({ top: Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight) * Math.min(1, pos / st.dur), behavior: 'smooth' }); }
+    if (mode === 'full' && lyr.lines.length && st.dur > 0 && t - (lyr.scrollAt || 0) > 250) { lyr.scrollAt = t; lyricsBox.scrollTo({ top: Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight) * Math.min(1, Math.max(0, pos - lyrBase) / (lyrLen || st.dur)), behavior: 'smooth' }); }
     return;
   }
-  const i = lineAt(pos + 0.25 + lyrOff + lyrGlobal);
+  const i = lineAt(pos - lyrBase + 0.25 + lyrOff + lyrGlobal);
   if (i === lyr.idx) return;
   if (lyr.idx >= 0 && lyr.lines[lyr.idx].el) lyr.lines[lyr.idx].el.classList.remove('on');
   lyr.idx = i;
@@ -517,7 +518,33 @@ function saveEntry(entry) { // newest first, de-duplicated, capped
   const list = store.get('nv.history').filter((e) => e.id !== entry.id);
   list.unshift(entry); store.set('nv.history', list.slice(0, 60));
 }
+/* ---------- the songs inside a long video (Windows): a track list from the video's description drives the title and the lyrics ---------- */
+let chap = null, chapToken = 0, lyrBase = 0, lyrLen = 0; // lyrBase: where the current song starts inside the video (seconds); lyrLen: its length
+async function findSongs(m) {
+  if (!bridge.chapters || !window.Chapters || P.chapters === false || !m.active || !(m.dur > 600) || !BROWSERS.test(m.app || '')) return;
+  const token = chapToken;
+  const r = await bridge.chapters({ title: m.title, channel: m.artist, dur: m.dur }).catch(() => null);
+  if (token !== chapToken || !r || !r.list || !r.list.length) return;
+  chap = { list: r.list, video: r.video, idx: -2 };
+}
+function chapFrame(pos) {
+  const i = Chapters.songAt(chap.list, pos);
+  if (i === chap.idx) return;
+  chap.idx = i;
+  if (i < 0) return;
+  const s = chap.list[i], sub = [s.artist, `in ${chap.video}`].filter(Boolean).join(' \u00b7 ');
+  const d = { title: s.title, artist: s.artist, cleaned: true, sub };
+  el.title.textContent = s.title; el.artist.textContent = sub; el.card.title = `${chap.video}`;
+  el.meta.classList.remove('enter'); void el.meta.offsetWidth; el.meta.classList.add('enter'); fitTitle();
+  curDisplay = d; curId = idOf(s.artist || '', s.title || '');
+  curEntry = { id: curId, title: s.title, artist: s.artist, app: prettyApp(st.app), ts: Date.now(), thumb: '' };
+  $('btn-fav').classList.toggle('on', isFav(curId));
+  if (typeof onSongChanged === 'function') onSongChanged();
+  lyrBase = s.t; lyrLen = Chapters.songLen(chap.list, i, st.dur);
+  loadLyrics({ ...st, dur: lyrLen }, d);
+}
 function onTrackChange(m, d) {
+  chap = null; chapToken++; lyrBase = 0; lyrLen = 0;
   if (abLoop.a !== null) { abLoop.a = abLoop.b = null; loopUi(); } // a new song: no loop
   renderIdle(m.active); if (!m.active) setTimeout(idleDecor, 0);
   curDisplay = m.active ? d : null;
@@ -532,6 +559,7 @@ function onTrackChange(m, d) {
   $('btn-fav').classList.toggle('on', isFav(curId));
   if (typeof onSongChanged === 'function') onSongChanged();
   loadLyrics(m, d);
+  findSongs(m);
   const key = m.key;
   setTimeout(() => { // give album art a moment to arrive before notifying
     if (lastKey !== key || !st.playing) return;
