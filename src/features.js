@@ -228,12 +228,17 @@ let lyrOff = 0; // seconds: this song's lyrics timing nudge (extras.js)
 let lyrGlobal = 0; try { lyrGlobal = parseFloat(localStorage.getItem('nv.lyrGlobal')) || 0; } catch {} // seconds, all songs (Bluetooth lag)
 let curDisplay = null;
 const lyricEl = $('lyric'), lyricsBox = $('lyrics');
+document.body.classList.add('lyr-none'); // until lyrics are found for a song (setLyrDot) the full screen player stays centred
 
 const parseLRC = LRC.parseLRC; // (src/lrc.js, shared with the phone app and the tests)
 /* the dot beside Shuffle: green = lyrics were found and will show for this song, grey = none (or off / still searching) */
 function setLyrDot(state, note = '') {
   const d = $('lyr-dot'); if (!d) return;
   d.className = 'lyr-dot ' + state;
+  if (state !== 'busy') { // no lyrics: the full screen player centres itself instead of leaving an empty column
+    const none = state !== 'found';
+    if (document.body.classList.contains('lyr-none') !== none) { document.body.classList.toggle('lyr-none', none); setTimeout(fitStage, 0); }
+  }
   d.title = state === 'found' ? 'Lyrics found: they will show for this song' + note : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
 }
 function clearLyrics(msg = '') {
@@ -589,8 +594,9 @@ function fitStage() {
   const ui = Math.max(1, Math.min(2.6, Math.min(W / 1100, H / 680)));
   root.style.setProperty('--ui', ui.toFixed(2)); document.body.classList.toggle('ultrawide', wide);
   const h = H - used - (64 + 40) * ui;
-  const w = mode === 'ambient' ? W - 112 * ui : (W - (112 + 40) * ui) / (wide ? 2.6 : 2.15);
-  root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
+  const single = mode === 'ambient' || document.body.classList.contains('lyr-none'); // one centred column
+  const w = single ? W - 112 * ui : (W - (112 + 40) * ui) / (wide ? 2.6 : 2.15);
+  root.style.setProperty('--amb', Math.max(1, Math.min(single ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
   fitTitle();
 }
 function bumpIdle(e, wait = 3000) { // full screen and ambient fade out their controls (and the cursor) when the mouse rests or leaves

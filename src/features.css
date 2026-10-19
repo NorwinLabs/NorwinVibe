@@ -100,6 +100,9 @@ body.fullscreen { padding: 0; }
 .fullscreen .card { border-radius: 0; box-shadow: none; padding: 28px 56px 36px; column-gap: 40px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: auto 1fr auto auto auto;
   grid-template-areas: "top top" "stage lyrics" "meta lyrics" "progress progress" "controls controls"; }
+.fullscreen:not(.ambient).lyr-none .card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "stage" "meta" "progress" "controls"; }
+.fullscreen:not(.ambient).lyr-none .lyrics { display: none; }
+.fullscreen:not(.ambient).lyr-none .meta { text-align: center; padding: 0; }
 .fullscreen .top { grid-area: top; }
 .fullscreen .stage { grid-area: stage; transform: scale(var(--amb, 1.8)); transform-origin: center; }
 .fullscreen .vinyl-wrap { transform: none; }
