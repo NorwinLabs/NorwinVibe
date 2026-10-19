@@ -221,6 +221,12 @@
       <div class="act-row"><button class="act" id="btn-tour">Show the tour</button></div>
       <h4 class="desk-only">Hotkeys</h4>
       <p class="hint desk-only">Ctrl+Alt + Space play/pause, &larr;/&rarr; skip, &uarr;/&darr; volume, H show/hide, G click-through<br>Full screen: F / F11 &middot; Ambient: A &middot; Esc exits</p>
+      <div class="admin-box" id="admin-box" hidden>
+        <h4>Admin</h4>
+        <div id="admin-locked"><div class="key-row"><input id="admin-pw" type="password" placeholder="Admin password" spellcheck="false" autocomplete="off"><button class="act" id="admin-unlock">Unlock</button></div></div>
+        <div id="admin-on" hidden><p class="hint">Admin mode is on: everything is unlocked.</p><div class="act-row"><button class="act" id="admin-usage">Usage data</button><button class="act" id="admin-lock">Lock</button></div></div>
+        <p class="hint" id="admin-msg"></p>
+      </div>
       <div class="dev-panel" id="dev-panel" hidden>
         <h4>Developer</h4>
         <button class="sw" id="dev-asfree"><span>Act as a free user <small>test the locked state</small></span><i></i></button>
@@ -246,6 +252,18 @@
     <div class="act-row"><button class="act" id="st-share">Share recap picture</button></div>
     <div class="act-row"><button class="act" id="st-csv">Export CSV</button><button class="act" id="st-json">Export JSON</button></div>
     <div class="act-row"><button class="act" id="st-reset">Reset stats</button></div>
+  </div>
+
+  <!-- usage numbers (admin mode) -->
+  <div class="pop" id="pop-usage">
+    <h4>Usage <small id="usage-at"></small></h4>
+    <div class="stat-row"><div><b id="us-online">-</b><span>online now</span></div><div><b id="us-day">-</b><span>today</span></div><div><b id="us-week">-</b><span>this week</span></div><div><b id="us-month">-</b><span>this month</span></div></div>
+    <div class="stat-row" style="margin-top:6px"><div><b id="us-installs">-</b><span>installs</span></div><div><b id="us-new-day">-</b><span>new today</span></div><div><b id="us-new-week">-</b><span>new this week</span></div></div>
+    <div class="stat-row" style="margin-top:6px"><div><b id="us-win">-</b><span>Windows downloads</span></div><div><b id="us-and">-</b><span>Android downloads</span></div><div><b id="us-upd">-</b><span>auto-updates</span></div></div>
+    <h4>Platform &middot; version &middot; country (30 days)</h4>
+    <div id="us-lists" class="hist"></div>
+    <p class="hint" id="usage-msg"></p>
+    <div class="act-row"><button class="act" id="usage-refresh">Refresh</button></div>
   </div>
 
   <!-- what's new (shown once after an update, and from Settings > About) -->

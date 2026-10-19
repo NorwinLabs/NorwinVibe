@@ -50,11 +50,12 @@
   }
   let prefs = LS.get('vibe.prefs', {});
   let licenses = LS.get('vibe.licenses', []);
-  let entitled = new Set(), devActive = false;
+  let entitled = new Set(), devActive = false, adminOk = false;
   try { localStorage.removeItem('vibe.owned'); } catch {} // older builds trusted a plain flag; entitlements now come only from keys
   function recompute() {
     const real = new Set();
     for (const k of licenses) { const o = verifyLicense(k); if (o) real.add(o.item); }
+    if (adminOk) real.add('dev'); // admin mode (the ADMIN_PASSWORD secret, see scripts/admin-config.js) counts as a developer key
     devActive = real.has('dev');
     const set = new Set();
     if (devActive && prefs.devAsFree) set.add('dev');
@@ -63,6 +64,17 @@
     setTimeout(() => window.dispatchEvent(new Event('vibe:library')), 0); // Pro on / off changes what Android Auto may show
   }
   const entitlementList = () => [...entitled];
+  /* admin mode: token = PBKDF2-SHA256(password, "norwinvibe-admin-v1", 100000 rounds); kept only if sha256(token) equals the check baked into the build */
+  const adminCheckCfg = () => String(((window.STORE_CONFIG || {}).admin || {}).check || '');
+  const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  async function adminDerive(pw) {
+    const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    return toHex(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode('norwinvibe-admin-v1'), iterations: 100000 }, k, 256));
+  }
+  async function adminVerify(token) {
+    const c = adminCheckCfg();
+    try { return !!c && /^[0-9a-f]{64}$/.test(token || '') && toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))) === c; } catch { return false; }
+  }
   const allowed = (k, v) => { for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id); return true; };
   const savePrefs = () => LS.set('vibe.prefs', prefs);
   const dropLockedChoices = () => { for (const k of Object.keys(ENUMS)) if (k in prefs && !allowed(k, prefs[k])) delete prefs[k]; };
@@ -699,6 +711,28 @@
       LS.set('vibe.licenses', licenses); recompute(); applyEq(); cb.owned && cb.owned(entitlementList());
       return { ok: true, item: o.item };
     },
+    admin: {
+      status: async () => ({ configured: !!adminCheckCfg(), active: adminOk, usage: /^https:\/\//.test(storeCfg().statsUrl || '') }),
+      unlock: async (pw) => {
+        if (!adminCheckCfg()) return { ok: false, error: 'Admin mode is not set up in this build.' };
+        if (typeof pw !== 'string' || !pw || pw.length > 200 || !(window.crypto && crypto.subtle)) return { ok: false, error: 'Wrong password.' };
+        const token = await adminDerive(pw);
+        if (!(await adminVerify(token))) return { ok: false, error: 'Wrong password.' };
+        LS.set('vibe.admin', token); adminOk = true; recompute(); cb.owned && cb.owned(entitlementList());
+        return { ok: true };
+      },
+      lock: async () => { LS.set('vibe.admin', ''); adminOk = false; recompute(); dropLockedChoices(); savePrefs(); cb.owned && cb.owned(entitlementList()); return { ok: true }; },
+      usage: async () => {
+        const url = String(storeCfg().statsUrl || '');
+        if (!adminOk) return { ok: false, error: 'Admin mode is off.' };
+        if (!/^https:\/\//.test(url)) return { ok: false, error: 'No usage service is set up (statsUrl in store.config.json).' };
+        try {
+          const r = await fetch(url.replace(/\/$/, '') + '/stats', { headers: { Authorization: 'Bearer ' + LS.get('vibe.admin', '') } });
+          if (!r.ok) return { ok: false, error: r.status === 404 ? 'The usage service does not accept this password (set its ADMIN_PASSWORD secret).' : `The usage service answered ${r.status}.` };
+          return { ok: true, data: await r.json() };
+        } catch { return { ok: false, error: 'No connection.' }; }
+      },
+    },
     dev: {
       info: async () => (devActive ? { version: window.APP_VERSION || '', packaged: true, electron: '', userData: '', asFree: !!prefs.devAsFree, licenses: licenses.length } : null),
       devtools() {}, fakeUpdate() {},
@@ -710,6 +744,8 @@
       },
     },
   };
+
+  adminVerify(LS.get('vibe.admin', '')).then((ok) => { if (ok) { adminOk = true; recompute(); cb.owned && cb.owned(entitlementList()); } }); // a saved admin unlock from an earlier run
 
   /* ================= library panel (Songs | Playlists) ================= */
   const fileIn = $('lib-file'), listEl = $('lib-list'), searchEl = $('lib-search');

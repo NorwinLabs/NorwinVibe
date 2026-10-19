@@ -5,7 +5,7 @@ let P = {};
 let pinned = true;
 
 /* ---------- panels ---------- */
-const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), eq: $('pop-eq'), news: $('pop-news') };
+const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), usage: $('pop-usage'), eq: $('pop-eq'), news: $('pop-news') };
 const closePops = () => Object.values(pops).forEach((p) => p && p.classList.remove('open'));
 function togglePop(name) {
   const open = !pops[name].classList.contains('open');
@@ -143,6 +143,7 @@ bridge.onOwned((list) => {
   const before = P.theme;
   bridge.prefs().then((p) => { P = p; showPrefs(); if (P.theme !== before) applyPalette(el.label.classList.contains('art') ? art.data : ''); });
   showPrefs(); if (pops.store.classList.contains('open')) renderStore();
+  if (window.adminRefresh) window.adminRefresh();
 });
 
 /* ---------- developer panel: only visible while a valid dev key is held ---------- */
@@ -687,3 +688,51 @@ if (bridge.onUpdate) {
     });
   };
 } else { $('btn-update').style.display = 'none'; }
+
+
+/* ---------- admin mode: a password (the ADMIN_PASSWORD repository secret, checked in the host) that unlocks everything and shows the usage numbers ---------- */
+(function adminMode() {
+  if (!bridge.admin) return;
+  const box = $('admin-box'), msg = $('admin-msg');
+  const refresh = async () => {
+    const s = await bridge.admin.status().catch(() => null); if (!s || !s.configured) { box.hidden = true; return; }
+    $('admin-locked').hidden = s.active; $('admin-on').hidden = !s.active; $('admin-usage').hidden = !s.usage;
+    if (s.active) box.hidden = false;
+  };
+  // the box stays out of sight until the version line in Settings > About is tapped five times (or admin mode is already on)
+  let taps = 0, tapT = 0;
+  $('about-ver').addEventListener('click', async () => {
+    const now = Date.now(); taps = now - tapT < 2500 ? taps + 1 : 1; tapT = now;
+    if (taps >= 5) { taps = 0; const s = await bridge.admin.status().catch(() => null); if (s && s.configured) { box.hidden = false; refresh(); $('admin-pw').focus(); } }
+  });
+  const unlock = async () => {
+    const pw = $('admin-pw').value; if (!pw) return; msg.textContent = '';
+    const r = await bridge.admin.unlock(pw); $('admin-pw').value = '';
+    msg.textContent = r.ok ? '' : r.error; if (r.ok) hud('Admin mode on'); refresh();
+  };
+  $('admin-unlock').onclick = unlock;
+  $('admin-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(); });
+  $('admin-lock').onclick = async () => { await bridge.admin.lock(); msg.textContent = ''; closeUsage(); hud('Admin mode off'); refresh(); };
+  const closeUsage = () => pops.usage.classList.remove('open');
+  const num = (n) => (n == null ? '-' : Number(n).toLocaleString());
+  async function showUsage() {
+    $('usage-msg').textContent = 'Loading...';
+    const r = await bridge.admin.usage();
+    if (!r.ok) { $('usage-msg').textContent = r.error; return; }
+    const d = r.data, set = (id, v) => { $(id).textContent = num(v); }, dl = d.downloads || {};
+    set('us-online', d.active.online); set('us-day', d.active.day); set('us-week', d.active.week); set('us-month', d.active.month);
+    set('us-installs', d.installs.total); set('us-new-day', d.installs.newToday); set('us-new-week', d.installs.newWeek);
+    set('us-win', dl.windows); set('us-and', dl.android); set('us-upd', dl.updates);
+    $('usage-at').textContent = new Date(d.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const lists = $('us-lists'); lists.textContent = '';
+    for (const [title, rows] of [['Platform', d.byPlatform], ['Version', d.byVersion], ['Country', d.byCountry]]) for (const x of rows || []) {
+      const row = document.createElement('div'); row.className = 'hrow';
+      const tx = document.createElement('div'); tx.className = 'tx'; const b = document.createElement('b'); b.textContent = x.k; const sp = document.createElement('span'); sp.textContent = title;
+      tx.append(b, sp); const n = document.createElement('b'); n.textContent = num(x.n); row.append(tx, n); lists.appendChild(row);
+    }
+    $('usage-msg').textContent = '';
+  }
+  $('admin-usage').onclick = () => { closePops(); pops.usage.classList.add('open'); showUsage(); };
+  $('usage-refresh').onclick = showUsage;
+  window.adminRefresh = refresh; refresh(); // (called from the onOwned handler above; the phone bridge keeps just one listener)
+})();

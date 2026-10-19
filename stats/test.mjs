@@ -57,5 +57,14 @@ const html = await (await worker.fetch(new Request(`https://s.test/dashboard?key
 assert.ok(html.includes('Online now') && html.includes('Installs, all time') && html.includes('Windows downloads'));
 const json = await (await worker.fetch(new Request('https://s.test/stats', { headers: { Authorization: `Bearer ${env.STATS_KEY}` } }), env)).json();
 assert.equal(json.installs.total, 4);
+// the apps' admin mode: the token derived from ADMIN_PASSWORD (same maths as scripts/admin-config.js) opens /stats, a wrong one does not
+const { adminToken } = await import('./src/index.js');
+const { adminToken: nodeToken } = await import('../scripts/admin-config.js').then((m) => m.default || m);
+const adminEnv = { ...env, ADMIN_PASSWORD: 'correct horse battery staple' };
+assert.equal(await adminToken(adminEnv.ADMIN_PASSWORD), nodeToken(adminEnv.ADMIN_PASSWORD), 'the Worker and the build script derive the same token');
+const asAdmin = (tok) => worker.fetch(new Request('https://s.test/stats', { headers: { Authorization: `Bearer ${tok}` } }), adminEnv);
+assert.equal((await asAdmin(nodeToken(adminEnv.ADMIN_PASSWORD))).status, 200);
+assert.equal((await asAdmin(nodeToken('wrong'))).status, 404);
+assert.equal((await worker.fetch(new Request('https://s.test/stats', { headers: { Authorization: `Bearer ${nodeToken(adminEnv.ADMIN_PASSWORD)}` } }), env)).status, 404, 'no ADMIN_PASSWORD set: the token opens nothing');
 globalThis.fetch = realFetch;
 console.log('stats ok');

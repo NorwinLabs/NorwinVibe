@@ -84,9 +84,18 @@ function verifyLicense(key) { // key = base64url(payload) + '.' + base64url(ed25
     return o;
   } catch { return null; }
 }
+/* ---------- admin mode ----------
+   The ADMIN_PASSWORD repository secret becomes "admin": { "check": sha256(token) } in store.config.json at build time (scripts/admin-config.js);
+   token = PBKDF2-SHA256(password, "norwinvibe-admin-v1", 100000 rounds). Typing the password derives the token, and the token is kept
+   (prefs.adminToken) only if its sha256 matches the check, so editing prefs.json can't unlock anything. Admin mode counts as a "dev" key:
+   everything unlocked, plus the usage numbers (the same token is what the stats service accepts). */
+const sha256hex = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+const adminCheck = () => String((storeCfg().admin || {}).check || '');
+const adminValid = (token) => { const c = adminCheck(); return !!c && typeof token === 'string' && /^[0-9a-f]{64}$/.test(token) && sha256hex(token) === c; };
 function recompute() {
   const real = new Set();
   for (const k of Array.isArray(prefs.licenses) ? prefs.licenses : []) { const o = verifyLicense(k); if (o) real.add(o.item); }
+  if (adminValid(prefs.adminToken)) real.add('dev');
   devActive = real.has('dev');
   const set = new Set();
   if (devActive && prefs.devAsFree) set.add('dev'); // developer pretending to be a free user, to test the locked experience
@@ -471,7 +480,7 @@ function registerHotkeys() {
 }
 
 /* ---------- IPC ---------- */
-ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, notesVersion, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
+ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, notesVersion, adminToken, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
 ipcMain.on('prefs:set', (_e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   for (const [k, v] of Object.entries(patch)) {
@@ -522,6 +531,27 @@ ipcMain.handle('store:buy', async (_e, id) => { // opens YOUR checkout page (e.g
 ipcMain.handle('store:redeem', (_e, key) => {
   const o = addLicense(key);
   return o ? { ok: true, item: o.item } : { ok: false, error: 'That license key is not valid or has expired.' };
+});
+
+ipcMain.handle('admin:status', () => ({ configured: !!adminCheck(), active: adminValid(prefs.adminToken), usage: /^https:\/\//.test(storeCfg().statsUrl || '') }));
+ipcMain.handle('admin:unlock', async (_e, pw) => {
+  if (!adminCheck()) return { ok: false, error: 'Admin mode is not set up in this build.' };
+  if (typeof pw !== 'string' || !pw || pw.length > 200) return { ok: false, error: 'Wrong password.' };
+  const token = await new Promise((res) => crypto.pbkdf2(pw, 'norwinvibe-admin-v1', 100000, 32, 'sha256', (err, k) => res(err ? '' : k.toString('hex'))));
+  if (!adminValid(token)) return { ok: false, error: 'Wrong password.' };
+  prefs.adminToken = token; savePrefs(); recompute(); toRenderer('store:owned', entitlementList());
+  return { ok: true };
+});
+ipcMain.handle('admin:lock', () => { delete prefs.adminToken; savePrefs(); recompute(); dropLockedChoices(); toRenderer('store:owned', entitlementList()); return { ok: true }; });
+ipcMain.handle('admin:usage', async () => { // the numbers from your stats service (the token never leaves the main process)
+  const url = String(storeCfg().statsUrl || '');
+  if (!adminValid(prefs.adminToken)) return { ok: false, error: 'Admin mode is off.' };
+  if (!/^https:\/\//.test(url)) return { ok: false, error: 'No usage service is set up (statsUrl in store.config.json).' };
+  try {
+    const r = await net.fetch(url.replace(/\/$/, '') + '/stats', { headers: { Authorization: `Bearer ${prefs.adminToken}` } });
+    if (!r.ok) return { ok: false, error: r.status === 404 ? 'The usage service does not accept this password (set its ADMIN_PASSWORD secret).' : `The usage service answered ${r.status}.` };
+    return { ok: true, data: await r.json() };
+  } catch { return { ok: false, error: 'No connection.' }; }
 });
 
 /* ---------- developer mode (only works while a valid, unexpired "dev" key is held) ---------- */
