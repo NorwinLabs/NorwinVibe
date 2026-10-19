@@ -68,6 +68,11 @@ jobs:
 
       # Updates only happen when the version goes UP, so each release gets <major>.<minor>.<run number>.
       # Change major.minor in package.json by hand for bigger releases; the patch number is automatic and never committed.
+      - name: Admin mode (from the ADMIN_PASSWORD secret)
+        run: node scripts/admin-config.js
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
       - name: Set version
         id: version
         run: |
@@ -180,6 +185,11 @@ jobs:
 
       - name: Write the release notes
         run: node ../scripts/release-notes.js ../RELEASE_NOTES.md
+
+      - name: Admin mode (from the ADMIN_PASSWORD secret)
+        run: node ../scripts/admin-config.js
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
       - name: Build web assets
         run: npm run build:web

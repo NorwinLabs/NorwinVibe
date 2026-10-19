@@ -9,6 +9,7 @@ const { DiscordRpc } = require('./lib/discord.js');
 const { createFader } = require('./lib/fade.js');
 const { createEmulator } = require('./lib/emulate.js');
 const { pickBest } = require('./src/lrc.js');
+const Chapters = require('./src/chapters.js');
 const { cleanMeta } = require('./src/titles.js');
 const { spawn } = require('child_process');
 const readline = require('readline');
@@ -21,7 +22,7 @@ app.setAppUserModelId(APP_ID);
 const SIZES = { full: { w: 360, h: 560 }, mini: { w: 450, h: 176 } };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', needle: 'classic', viz: 'bars', speed: 'slow', bgart: 'cover',
-  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, stats: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
+  autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, screensaver: false, ssMin: '5', obs: false, discord: false, smartshuffle: false, stats: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, chapters: true, lyrics: true, toasts: true, fade: false, snap: true, autostart: false };
 const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
 const ENUMS = {
   bgart: ['cover', 'soft', 'off'],
@@ -41,7 +42,7 @@ const PAID = {
 };
 const PUBLIC_KEY = (() => { try { return fs.readFileSync(path.join(__dirname, 'licensing', 'public.pem')); } catch { return null; } })();
 const storeCfg = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'store.config.json'), 'utf8')); } catch { return { items: {} }; } };
-const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle', 'stats', 'deck3d', 'dancers', 'scratchfx', 'deckmove'];
+const BOOLS = ['lyrics', 'toasts', 'fade', 'snap', 'autostart', 'autotheme', 'fadeout', 'screensaver', 'obs', 'discord', 'smartshuffle', 'stats', 'deck3d', 'dancers', 'scratchfx', 'deckmove', 'chapters'];
 const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'screensaver', 'ssMin', 'obs', 'discord', 'smartshuffle']); // only settable with a Pro license
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
@@ -84,9 +85,18 @@ function verifyLicense(key) { // key = base64url(payload) + '.' + base64url(ed25
     return o;
   } catch { return null; }
 }
+/* ---------- admin mode ----------
+   The ADMIN_PASSWORD repository secret becomes "admin": { "check": sha256(token) } in store.config.json at build time (scripts/admin-config.js);
+   token = PBKDF2-SHA256(password, "norwinvibe-admin-v1", 100000 rounds). Typing the password derives the token, and the token is kept
+   (prefs.adminToken) only if its sha256 matches the check, so editing prefs.json can't unlock anything. Admin mode counts as a "dev" key:
+   everything unlocked, plus the usage numbers (the same token is what the stats service accepts). */
+const sha256hex = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+const adminCheck = () => String((storeCfg().admin || {}).check || '');
+const adminValid = (token) => { const c = adminCheck(); return !!c && typeof token === 'string' && /^[0-9a-f]{64}$/.test(token) && sha256hex(token) === c; };
 function recompute() {
   const real = new Set();
   for (const k of Array.isArray(prefs.licenses) ? prefs.licenses : []) { const o = verifyLicense(k); if (o) real.add(o.item); }
+  if (adminValid(prefs.adminToken)) real.add('dev');
   devActive = real.has('dev');
   const set = new Set();
   if (devActive && prefs.devAsFree) set.add('dev'); // developer pretending to be a free user, to test the locked experience
@@ -400,6 +410,35 @@ async function fetchLyrics({ artist, title, album, dur }) {
   return out;
 }
 
+/* ---------- songs inside a long video ----------
+   A mix or compilation is one "song" to Windows. When "Find the songs in mixes" is on, the app looks the video up on YouTube (by its title and
+   length), reads the track list in the description ("0:00 Artist - Song") and the window then shows the right song and lyrics as it plays.
+   Only the video's title is sent, and only for long videos from a browser. Results are remembered for the session. */
+const chapterCache = new Map();
+const YT_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9', Cookie: 'CONSENT=YES+1; SOCS=CAI' };
+async function ytPage(url) { try { const r = await net.fetch(url, { headers: YT_HEADERS }); return r.ok ? await r.text() : ''; } catch { return ''; } }
+async function findChapters({ title, channel, dur }) {
+  title = String(title || '').slice(0, 200); channel = String(channel || '').slice(0, 100); dur = Number(dur) || 0;
+  if (!title || dur < 600) return null;
+  const key = `${title}|${channel}|${Math.round(dur)}`;
+  const hit = chapterCache.get(key);
+  if (hit && (hit.out || Date.now() - hit.at < 10 * 60000)) return hit.out; // (a miss is tried again after ten minutes)
+  let out = null;
+  try {
+    const q = encodeURIComponent(`${title} ${channel}`.trim());
+    const found = Chapters.pickVideo(Chapters.searchResults(Chapters.extractJson(await ytPage(`https://www.youtube.com/results?search_query=${q}&hl=en`), 'var ytInitialData =')), { title, channel, dur });
+    if (found) {
+      const player = Chapters.extractJson(await ytPage(`https://www.youtube.com/watch?v=${found.id}&hl=en`), 'var ytInitialPlayerResponse =');
+      const list = Chapters.parseTracklist(player && player.videoDetails && player.videoDetails.shortDescription, dur);
+      if (list.length) out = { video: found.title, list };
+    }
+  } catch { out = null; }
+  if (chapterCache.size > 50) chapterCache.clear();
+  chapterCache.set(key, { out, at: Date.now() });
+  return out;
+}
+ipcMain.handle('chapters:find', (_e, m) => (pref('chapters') ? findChapters(m || {}) : null));
+
 /* ---------- sleep timer ---------- */
 let sleepTimer = null, sleepFadeTimer = null, sleepEnds = 0;
 function setSleep(mins) {
@@ -471,7 +510,7 @@ function registerHotkeys() {
 }
 
 /* ---------- IPC ---------- */
-ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, notesVersion, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
+ipcMain.handle('prefs:get', () => { const { licenses, devAsFree, installId, notesVersion, adminToken, ...rest } = prefs; return { ...DEFAULTS, ...rest, owned: entitlementList(), sleepEnds, version: app.getVersion() }; });
 ipcMain.on('prefs:set', (_e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   for (const [k, v] of Object.entries(patch)) {
@@ -522,6 +561,27 @@ ipcMain.handle('store:buy', async (_e, id) => { // opens YOUR checkout page (e.g
 ipcMain.handle('store:redeem', (_e, key) => {
   const o = addLicense(key);
   return o ? { ok: true, item: o.item } : { ok: false, error: 'That license key is not valid or has expired.' };
+});
+
+ipcMain.handle('admin:status', () => ({ configured: !!adminCheck(), active: adminValid(prefs.adminToken), usage: /^https:\/\//.test(storeCfg().statsUrl || '') }));
+ipcMain.handle('admin:unlock', async (_e, pw) => {
+  if (!adminCheck()) return { ok: false, error: 'Admin mode is not set up in this build.' };
+  if (typeof pw !== 'string' || !pw || pw.length > 200) return { ok: false, error: 'Wrong password.' };
+  const token = await new Promise((res) => crypto.pbkdf2(pw, 'norwinvibe-admin-v1', 100000, 32, 'sha256', (err, k) => res(err ? '' : k.toString('hex'))));
+  if (!adminValid(token)) return { ok: false, error: 'Wrong password.' };
+  prefs.adminToken = token; savePrefs(); recompute(); toRenderer('store:owned', entitlementList());
+  return { ok: true };
+});
+ipcMain.handle('admin:lock', () => { delete prefs.adminToken; savePrefs(); recompute(); dropLockedChoices(); toRenderer('store:owned', entitlementList()); return { ok: true }; });
+ipcMain.handle('admin:usage', async () => { // the numbers from your stats service (the token never leaves the main process)
+  const url = String(storeCfg().statsUrl || '');
+  if (!adminValid(prefs.adminToken)) return { ok: false, error: 'Admin mode is off.' };
+  if (!/^https:\/\//.test(url)) return { ok: false, error: 'No usage service is set up (statsUrl in store.config.json).' };
+  try {
+    const r = await net.fetch(url.replace(/\/$/, '') + '/stats', { headers: { Authorization: `Bearer ${prefs.adminToken}` } });
+    if (!r.ok) return { ok: false, error: r.status === 404 ? 'The usage service does not accept this password (set its ADMIN_PASSWORD secret).' : `The usage service answered ${r.status}.` };
+    return { ok: true, data: await r.json() };
+  } catch { return { ok: false, error: 'No connection.' }; }
 });
 
 /* ---------- developer mode (only works while a valid, unexpired "dev" key is held) ---------- */

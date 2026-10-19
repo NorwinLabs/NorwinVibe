@@ -36,3 +36,10 @@ npx wrangler deploy                                         # prints the worker'
 - Counting an anonymous random id can still count as personal data in some countries (the EU, for example). The setting is on by default
   with a plain explanation; if you would rather ask first, change `stats: true` to `false` in `main.js` and `mobile/src/mobile.js`
   (DEFAULTS), and add a line about it to your privacy policy.
+
+## Admin mode (the numbers inside the app)
+
+Add a repository secret **ADMIN_PASSWORD** (GitHub > Settings > Secrets and variables > Actions) and use a long one. Releases built after that
+have admin mode: in the app open Settings > About, tap the version line five times, type the password. It unlocks everything (like a developer
+key) and adds a **Usage data** button. For the numbers, give this service the same password too: `npx wrangler secret put ADMIN_PASSWORD`
+(and set `statsUrl` in `store.config.json`). The password is never in the app: the build only contains a check value (`scripts/admin-config.js`).

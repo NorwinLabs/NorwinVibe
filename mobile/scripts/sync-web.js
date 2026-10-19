@@ -11,7 +11,7 @@ fs.rmSync(www, { recursive: true, force: true });
 fs.mkdirSync(path.join(www, 'vendor'), { recursive: true });
 
 // 1. shared UI code: copied verbatim, so the desktop and phone apps stay in step
-for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js', 'pro.js', 'extras.js', 'scratchfx.js', 'dancers.js', 'lrc.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
+for (const f of ['styles.css', 'features.css', 'titles.js', 'renderer.js', 'features.js', 'pro.js', 'extras.js', 'scratchfx.js', 'dancers.js', 'lrc.js', 'chapters.js']) fs.copyFileSync(path.join(shared, f), path.join(www, f));
 // 2. phone-only code
 for (const f of ['mobile.js', 'mobile.css']) fs.copyFileSync(path.join(mobile, 'src', f), path.join(www, f));
 // 3. vendored libraries (no CDN at runtime, so the app works offline)
@@ -56,6 +56,8 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
     <button class="sw" id="eq-on"><span>Equalizer</span><i></i></button>
     <div class="chips" id="eq-presets"></div>
     <div id="eq-bands"></div>
+    <h4>Sound filter</h4>
+    <div class="chips" id="eq-filters"></div>
     <h4>Crossfade</h4>
     <div class="vol-row"><input type="range" id="xf" min="0" max="12" step="1" value="0"><span id="xf-n">Off</span></div>
     <p class="hint">Blends the end of a song into the next one. Songs shorter than about 2.5 times the fade are left alone.</p>

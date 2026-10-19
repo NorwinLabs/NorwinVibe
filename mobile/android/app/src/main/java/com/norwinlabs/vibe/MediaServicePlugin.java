@@ -96,7 +96,7 @@ public class MediaServicePlugin extends Plugin {
         float[] g = new float[5];
         try { com.getcapacitor.JSArray a = call.getArray("gains"); for (int i = 0; i < 5 && a != null && i < a.length(); i++) g[i] = (float) a.getDouble(i); } catch (Exception ignored) { }
         Integer xf = call.getInt("xfade", 0);
-        NativePlayer.setFx(pro, eq, g, xf == null ? 0 : xf, !Boolean.FALSE.equals(call.getBoolean("rg", true)), !Boolean.FALSE.equals(call.getBoolean("slow", true)));
+        NativePlayer.setFx(pro, eq, g, xf == null ? 0 : xf, !Boolean.FALSE.equals(call.getBoolean("rg", true)), !Boolean.FALSE.equals(call.getBoolean("slow", true)), call.getString("filter", "none"));
     }
 
     @PluginMethod

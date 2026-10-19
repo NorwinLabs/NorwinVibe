@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   storeBuy: (id) => ipcRenderer.invoke('store:buy', id),
   storeRedeem: (key) => ipcRenderer.invoke('store:redeem', key),
   storeRestore: (email) => ipcRenderer.invoke('store:restore', email),
+  admin: { status: () => ipcRenderer.invoke('admin:status'), unlock: (pw) => ipcRenderer.invoke('admin:unlock', pw), lock: () => ipcRenderer.invoke('admin:lock'), usage: () => ipcRenderer.invoke('admin:usage') },
   dev: {
     info: () => ipcRenderer.invoke('dev:info'), devtools: () => ipcRenderer.send('dev:devtools'), asFree: (on) => ipcRenderer.send('dev:asfree', on),
     fakeUpdate: () => ipcRenderer.send('dev:fakeupdate'), screensaver: () => ipcRenderer.send('dev:screensaver'), signOut: () => ipcRenderer.send('dev:signout'),
@@ -32,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   prefs: () => ipcRenderer.invoke('prefs:get'),
   setPrefs: (p) => ipcRenderer.send('prefs:set', p),
   lyrics: (m) => ipcRenderer.invoke('lyrics:get', m),
+  chapters: (m) => ipcRenderer.invoke('chapters:find', m),
   toast: (t) => ipcRenderer.send('toast', t),
   sleep: (mins) => ipcRenderer.send('sleep:set', mins),
   close: () => ipcRenderer.send('win:close'),

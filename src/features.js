@@ -5,7 +5,7 @@ let P = {};
 let pinned = true;
 
 /* ---------- panels ---------- */
-const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), eq: $('pop-eq'), news: $('pop-news') };
+const pops = { settings: $('pop-settings'), history: $('pop-history'), store: $('pop-store'), library: $('pop-library'), stats: $('pop-stats'), usage: $('pop-usage'), eq: $('pop-eq'), news: $('pop-news') };
 const closePops = () => Object.values(pops).forEach((p) => p && p.classList.remove('open'));
 function togglePop(name) {
   const open = !pops[name].classList.contains('open');
@@ -83,7 +83,7 @@ prefsReady.then((p) => { P = p; pinned = p.pin; sleepEnds = p.sleepEnds || 0; sh
 
 /* ---------- theme store ---------- */
 const STORE_UI = {
-  pro: { blurb: 'Every theme pack, now and in the future, plus the Pro features. One purchase, on both Windows and Android.', parts: ['All theme packs', 'Listening stats', 'Time-of-day themes', 'Sleep fade-out', 'Screensaver', 'OBS overlay', 'Discord status', 'Equalizer & crossfade', 'Playlists', 'Smart shuffle', 'Lock screen & widget'], apply: {} },
+  pro: { blurb: 'Every theme pack, now and in the future, plus the Pro features. One purchase, on both Windows and Android.', parts: ['All theme packs', 'Listening stats', 'Time-of-day themes', 'Sleep fade-out', 'Screensaver', 'OBS overlay', 'Discord status', 'Equalizer, sound filters & crossfade', 'Playlists', 'Smart shuffle', 'Lock screen & widget'], apply: {} },
   cyberpunk: { blurb: 'Neon-soaked card theme, circuit-etched record, plasma needle and a glitch-wave visualizer.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
     apply: { theme: 'cyberpunk', record: 'cyber', needle: 'cyber', viz: 'cyber' } },
   nightcity: { blurb: 'Dystopian terminal look: black glass, hot red neon lines, glowing cyan light bars, data-grid overlays, scratches and a glitching HUD.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
@@ -143,6 +143,7 @@ bridge.onOwned((list) => {
   const before = P.theme;
   bridge.prefs().then((p) => { P = p; showPrefs(); if (P.theme !== before) applyPalette(el.label.classList.contains('art') ? art.data : ''); });
   showPrefs(); if (pops.store.classList.contains('open')) renderStore();
+  if (window.adminRefresh) window.adminRefresh();
 });
 
 /* ---------- developer panel: only visible while a valid dev key is held ---------- */
@@ -228,12 +229,17 @@ let lyrOff = 0; // seconds: this song's lyrics timing nudge (extras.js)
 let lyrGlobal = 0; try { lyrGlobal = parseFloat(localStorage.getItem('nv.lyrGlobal')) || 0; } catch {} // seconds, all songs (Bluetooth lag)
 let curDisplay = null;
 const lyricEl = $('lyric'), lyricsBox = $('lyrics');
+document.body.classList.add('lyr-none'); // until lyrics are found for a song (setLyrDot) the full screen player stays centred
 
 const parseLRC = LRC.parseLRC; // (src/lrc.js, shared with the phone app and the tests)
 /* the dot beside Shuffle: green = lyrics were found and will show for this song, grey = none (or off / still searching) */
 function setLyrDot(state, note = '') {
   const d = $('lyr-dot'); if (!d) return;
   d.className = 'lyr-dot ' + state;
+  if (state !== 'busy') { // no lyrics: the full screen player centres itself instead of leaving an empty column
+    const none = state !== 'found';
+    if (document.body.classList.contains('lyr-none') !== none) { document.body.classList.toggle('lyr-none', none); setTimeout(fitStage, 0); }
+  }
   d.title = state === 'found' ? 'Lyrics found: they will show for this song' + note : state === 'busy' ? 'Looking for lyrics…' : (P.lyrics === false ? 'Lyrics are turned off' : 'No lyrics for this song');
 }
 function clearLyrics(msg = '') {
@@ -430,15 +436,16 @@ $('loop-b').onclick = () => { if (!st.active || abLoop.a === null) { hud('Set A 
 $('loop-clear').onclick = () => { abLoop.a = abLoop.b = null; loopUi(); hud('Loop cleared'); };
 function featFrame(t, pos) {
   updateArm(t, pos);
+  if (chap) chapFrame(pos);
   if (st.active && st.playing) {
     if (abLoop.b !== null && pos >= abLoop.b && t - abLoop.at > 700) { abLoop.at = t; seekTo(abLoop.a); }
     if (sleepSong && st.dur > 3 && pos >= st.dur - 0.7) { sleepSong = false; send('pause'); updateSleep(0); hud('Paused at the end of the song'); }
   }
   if (!lyr.synced) { // plain lyrics have no timing: in full screen, scroll them along with the song's progress
-    if (mode === 'full' && lyr.lines.length && st.dur > 0 && t - (lyr.scrollAt || 0) > 250) { lyr.scrollAt = t; lyricsBox.scrollTo({ top: Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight) * Math.min(1, pos / st.dur), behavior: 'smooth' }); }
+    if (mode === 'full' && lyr.lines.length && st.dur > 0 && t - (lyr.scrollAt || 0) > 250) { lyr.scrollAt = t; lyricsBox.scrollTo({ top: Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight) * Math.min(1, Math.max(0, pos - lyrBase) / (lyrLen || st.dur)), behavior: 'smooth' }); }
     return;
   }
-  const i = lineAt(pos + 0.25 + lyrOff + lyrGlobal);
+  const i = lineAt(pos - lyrBase + 0.25 + lyrOff + lyrGlobal);
   if (i === lyr.idx) return;
   if (lyr.idx >= 0 && lyr.lines[lyr.idx].el) lyr.lines[lyr.idx].el.classList.remove('on');
   lyr.idx = i;
@@ -511,7 +518,33 @@ function saveEntry(entry) { // newest first, de-duplicated, capped
   const list = store.get('nv.history').filter((e) => e.id !== entry.id);
   list.unshift(entry); store.set('nv.history', list.slice(0, 60));
 }
+/* ---------- the songs inside a long video (Windows): a track list from the video's description drives the title and the lyrics ---------- */
+let chap = null, chapToken = 0, lyrBase = 0, lyrLen = 0; // lyrBase: where the current song starts inside the video (seconds); lyrLen: its length
+async function findSongs(m) {
+  if (!bridge.chapters || !window.Chapters || P.chapters === false || !m.active || !(m.dur > 600) || !BROWSERS.test(m.app || '')) return;
+  const token = chapToken;
+  const r = await bridge.chapters({ title: m.title, channel: m.artist, dur: m.dur }).catch(() => null);
+  if (token !== chapToken || !r || !r.list || !r.list.length) return;
+  chap = { list: r.list, video: r.video, idx: -2 };
+}
+function chapFrame(pos) {
+  const i = Chapters.songAt(chap.list, pos);
+  if (i === chap.idx) return;
+  chap.idx = i;
+  if (i < 0) return;
+  const s = chap.list[i], sub = [s.artist, `in ${chap.video}`].filter(Boolean).join(' \u00b7 ');
+  const d = { title: s.title, artist: s.artist, cleaned: true, sub };
+  el.title.textContent = s.title; el.artist.textContent = sub; el.card.title = `${chap.video}`;
+  el.meta.classList.remove('enter'); void el.meta.offsetWidth; el.meta.classList.add('enter'); fitTitle();
+  curDisplay = d; curId = idOf(s.artist || '', s.title || '');
+  curEntry = { id: curId, title: s.title, artist: s.artist, app: prettyApp(st.app), ts: Date.now(), thumb: '' };
+  $('btn-fav').classList.toggle('on', isFav(curId));
+  if (typeof onSongChanged === 'function') onSongChanged();
+  lyrBase = s.t; lyrLen = Chapters.songLen(chap.list, i, st.dur);
+  loadLyrics({ ...st, dur: lyrLen }, d);
+}
 function onTrackChange(m, d) {
+  chap = null; chapToken++; lyrBase = 0; lyrLen = 0;
   if (abLoop.a !== null) { abLoop.a = abLoop.b = null; loopUi(); } // a new song: no loop
   renderIdle(m.active); if (!m.active) setTimeout(idleDecor, 0);
   curDisplay = m.active ? d : null;
@@ -526,6 +559,7 @@ function onTrackChange(m, d) {
   $('btn-fav').classList.toggle('on', isFav(curId));
   if (typeof onSongChanged === 'function') onSongChanged();
   loadLyrics(m, d);
+  findSongs(m);
   const key = m.key;
   setTimeout(() => { // give album art a moment to arrive before notifying
     if (lastKey !== key || !st.playing) return;
@@ -589,8 +623,9 @@ function fitStage() {
   const ui = Math.max(1, Math.min(2.6, Math.min(W / 1100, H / 680)));
   root.style.setProperty('--ui', ui.toFixed(2)); document.body.classList.toggle('ultrawide', wide);
   const h = H - used - (64 + 40) * ui;
-  const w = mode === 'ambient' ? W - 112 * ui : (W - (112 + 40) * ui) / (wide ? 2.6 : 2.15);
-  root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
+  const single = mode === 'ambient' || document.body.classList.contains('lyr-none'); // one centred column
+  const w = single ? W - 112 * ui : (W - (112 + 40) * ui) / (wide ? 2.6 : 2.15);
+  root.style.setProperty('--amb', Math.max(1, Math.min(single ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
   fitTitle();
 }
 function bumpIdle(e, wait = 3000) { // full screen and ambient fade out their controls (and the cursor) when the mouse rests or leaves
@@ -681,3 +716,51 @@ if (bridge.onUpdate) {
     });
   };
 } else { $('btn-update').style.display = 'none'; }
+
+
+/* ---------- admin mode: a password (the ADMIN_PASSWORD repository secret, checked in the host) that unlocks everything and shows the usage numbers ---------- */
+(function adminMode() {
+  if (!bridge.admin) return;
+  const box = $('admin-box'), msg = $('admin-msg');
+  const refresh = async () => {
+    const s = await bridge.admin.status().catch(() => null); if (!s || !s.configured) { box.hidden = true; return; }
+    $('admin-locked').hidden = s.active; $('admin-on').hidden = !s.active; $('admin-usage').hidden = !s.usage;
+    if (s.active) box.hidden = false;
+  };
+  // the box stays out of sight until the version line in Settings > About is tapped five times (or admin mode is already on)
+  let taps = 0, tapT = 0;
+  $('about-ver').addEventListener('click', async () => {
+    const now = Date.now(); taps = now - tapT < 2500 ? taps + 1 : 1; tapT = now;
+    if (taps >= 5) { taps = 0; const s = await bridge.admin.status().catch(() => null); if (s && s.configured) { box.hidden = false; refresh(); $('admin-pw').focus(); } }
+  });
+  const unlock = async () => {
+    const pw = $('admin-pw').value; if (!pw) return; msg.textContent = '';
+    const r = await bridge.admin.unlock(pw); $('admin-pw').value = '';
+    msg.textContent = r.ok ? '' : r.error; if (r.ok) hud('Admin mode on'); refresh();
+  };
+  $('admin-unlock').onclick = unlock;
+  $('admin-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(); });
+  $('admin-lock').onclick = async () => { await bridge.admin.lock(); msg.textContent = ''; closeUsage(); hud('Admin mode off'); refresh(); };
+  const closeUsage = () => pops.usage.classList.remove('open');
+  const num = (n) => (n == null ? '-' : Number(n).toLocaleString());
+  async function showUsage() {
+    $('usage-msg').textContent = 'Loading...';
+    const r = await bridge.admin.usage();
+    if (!r.ok) { $('usage-msg').textContent = r.error; return; }
+    const d = r.data, set = (id, v) => { $(id).textContent = num(v); }, dl = d.downloads || {};
+    set('us-online', d.active.online); set('us-day', d.active.day); set('us-week', d.active.week); set('us-month', d.active.month);
+    set('us-installs', d.installs.total); set('us-new-day', d.installs.newToday); set('us-new-week', d.installs.newWeek);
+    set('us-win', dl.windows); set('us-and', dl.android); set('us-upd', dl.updates);
+    $('usage-at').textContent = new Date(d.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const lists = $('us-lists'); lists.textContent = '';
+    for (const [title, rows] of [['Platform', d.byPlatform], ['Version', d.byVersion], ['Country', d.byCountry]]) for (const x of rows || []) {
+      const row = document.createElement('div'); row.className = 'hrow';
+      const tx = document.createElement('div'); tx.className = 'tx'; const b = document.createElement('b'); b.textContent = x.k; const sp = document.createElement('span'); sp.textContent = title;
+      tx.append(b, sp); const n = document.createElement('b'); n.textContent = num(x.n); row.append(tx, n); lists.appendChild(row);
+    }
+    $('usage-msg').textContent = '';
+  }
+  $('admin-usage').onclick = () => { closePops(); pops.usage.classList.add('open'); showUsage(); };
+  $('usage-refresh').onclick = showUsage;
+  window.adminRefresh = refresh; refresh(); // (called from the onOwned handler above; the phone bridge keeps just one listener)
+})();

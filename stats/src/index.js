@@ -1,13 +1,13 @@
 // NorwinVibe usage numbers: installs, who is online now, daily / weekly / monthly active users, and release downloads.
 //   POST /ping        the apps call this on start and every few minutes ({ id, v, p, e })
 //   GET  /dashboard?key=STATS_KEY   the page you look at
-//   GET  /stats?key=STATS_KEY       the same numbers as JSON
+//   GET  /stats?key=STATS_KEY       the same numbers as JSON (the key can also be the admin token from the apps: set the ADMIN_PASSWORD secret)
 // Stored per install: a random id, the first / last time it was seen, the platform, the app version and a two-letter country.
 // Never stored: names, emails, IP addresses, songs, anything about what is played.
 
 const MIN = 60000, DAY = 86400000;
 const PLATFORMS = new Set(['win', 'android']);
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 
@@ -16,9 +16,20 @@ function sameKey(a, b) { // constant-time compare, so the key cannot be guessed 
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-const authorized = (request, env) => {
-  const url = new URL(request.url), bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  return sameKey(url.searchParams.get('key') || bearer, env.STATS_KEY || '');
+// The apps' admin mode (see scripts/admin-config.js) sends PBKDF2-SHA256(ADMIN_PASSWORD, "norwinvibe-admin-v1", 100000 rounds) as its key, so
+// the same ADMIN_PASSWORD secret that unlocks the apps also opens the numbers. STATS_KEY keeps working for the browser dashboard.
+export async function adminToken(password) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode('norwinvibe-admin-v1'), iterations: 100000 }, k, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+let adminCache = null; // (the derived token, remembered per password, so the 100000 rounds run once)
+const authorized = async (request, env) => {
+  const url = new URL(request.url), bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''), key = url.searchParams.get('key') || bearer;
+  if (sameKey(key, env.STATS_KEY || '')) return true;
+  if (!env.ADMIN_PASSWORD || !key) return false;
+  if (!adminCache || adminCache.pw !== env.ADMIN_PASSWORD) adminCache = { pw: env.ADMIN_PASSWORD, token: await adminToken(env.ADMIN_PASSWORD) };
+  return sameKey(key, adminCache.token);
 };
 
 export async function ping(request, env, now = Date.now()) {
@@ -110,9 +121,9 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (request.method === 'POST' && url.pathname === '/ping') return ping(request, env);
     if (request.method === 'GET' && (url.pathname === '/dashboard' || url.pathname === '/stats')) {
-      if (!authorized(request, env)) return new Response('Not found', { status: 404 }); // looks like nothing is here
+      if (!(await authorized(request, env))) return new Response('Not found', { status: 404, headers: CORS }); // looks like nothing is here
       const d = await collect(env);
-      if (url.pathname === '/stats') return new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      if (url.pathname === '/stats') return new Response(JSON.stringify(d), { headers: { ...CORS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
       return new Response(page(d), { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
     }
     return new Response('Not found', { status: 404 });

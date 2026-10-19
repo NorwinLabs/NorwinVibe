@@ -147,6 +147,8 @@ if (window.vibeFx && $('pop-eq')) {
   const hz = (f) => (f >= 1000 ? `${f / 1000} kHz` : `${f} Hz`);
   const PRESET_LABELS = { flat: 'Flat', bass: 'Bass', vocal: 'Vocal', treble: 'Treble', rock: 'Rock', soft: 'Soft' };
   Object.keys(fxe.presets).forEach((k) => { const b = document.createElement('button'); b.dataset.v = k; b.textContent = PRESET_LABELS[k] || k; b.onclick = () => { if (fxe.set({ eq: true, gains: fxe.presets[k], preset: k })) renderEq(); }; presetsEl.appendChild(b); });
+  const filtersEl = $('eq-filters'), FILTER_LABELS = { none: 'Off', bass: 'Bass boost', wide: 'Wide', loud: 'Loud', warm: 'Warm', lofi: 'Lo-fi', radio: 'Radio', room: 'Room', hall: 'Hall', club: 'Club' };
+  if (filtersEl) fxe.get().filters.forEach((k) => { const b = document.createElement('button'); b.dataset.v = k; b.textContent = FILTER_LABELS[k] || k; b.onclick = () => { if (!isPro()) { openPro(); return; } fxe.set({ filter: k }); renderEq(); }; filtersEl.appendChild(b); });
   fxe.get().freqs.forEach((f, i) => {
     const row = document.createElement('label'); row.className = 'eq-band';
     const name = document.createElement('span'); name.className = 'hz'; name.textContent = hz(f);
@@ -160,6 +162,7 @@ if (window.vibeFx && $('pop-eq')) {
     $('eq-on').classList.toggle('on', f.eq);
     bandsEl.querySelectorAll('input').forEach((r, i) => { r.value = f.gains[i]; r.style.setProperty('--p', `${(f.gains[i] + 12) / 24 * 100}%`); r.nextSibling.textContent = `${f.gains[i] > 0 ? '+' : ''}${f.gains[i]}`; });
     presetsEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === f.preset));
+    if (filtersEl) filtersEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === f.filter));
     xf.value = f.xfade; xf.style.setProperty('--p', `${f.xfade / 12 * 100}%`); $('xf-n').textContent = f.xfade ? `${f.xfade}s` : 'Off';
   }
   $('eq-on').onclick = () => { if (!isPro()) { openPro(); return; } fxe.set({ eq: !fxe.get().eq }); renderEq(); };

@@ -7,8 +7,11 @@ import android.media.AudioAttributes;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.media.PlaybackParams;
+import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
+import android.media.audiofx.PresetReverb;
+import android.media.audiofx.Virtualizer;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -33,11 +36,13 @@ final class NativePlayer {
 
     /** One MediaPlayer plus its equalizer. */
     private static final class Deck {
-        MediaPlayer mp; Equalizer eq; LoudnessEnhancer le; boolean ready = false; Runnable onReady;
+        MediaPlayer mp; Equalizer eq; LoudnessEnhancer le; BassBoost bb; Virtualizer vz; boolean aux = false; boolean ready = false; Runnable onReady;
         Float rgDb = null; float rg = 1f; // ReplayGain from the song's tags: rgDb is the raw value, rg the volume factor it becomes
         void release() {
             ready = false; onReady = null;
             if (le != null) { try { le.release(); } catch (Exception ignored) { } le = null; }
+            if (bb != null) { try { bb.release(); } catch (Exception ignored) { } bb = null; }
+            if (vz != null) { try { vz.release(); } catch (Exception ignored) { } vz = null; }
             if (eq != null) { try { eq.release(); } catch (Exception ignored) { } eq = null; }
             if (mp != null) { try { mp.setOnCompletionListener(null); mp.setOnErrorListener(null); mp.setOnPreparedListener(null); mp.release(); } catch (Exception ignored) { } mp = null; }
         }
@@ -67,6 +72,27 @@ final class NativePlayer {
     private static float rampFrom = 1f, rampTo = 1f; private static long rampAt = 0, rampMs = 0; private static Runnable rampDone; private static boolean ramping = false;
     private static Context ctx;
     private static final int[] EQ_FREQS = { 60, 230, 910, 3600, 14000 };
+
+    /* ---- sound filters (Pro): an equalizer tilt plus the phone's own effects. bass / wide: 0-1000 strength; loud: millibels; reverb: PresetReverb preset or -1 ---- */
+    private static final class Filter {
+        final float[] eq; final int bass, wide, loud, reverb;
+        Filter(float[] eq, int bass, int wide, int loud, int reverb) { this.eq = eq; this.bass = bass; this.wide = wide; this.loud = loud; this.reverb = reverb; }
+    }
+    private static final java.util.Map<String, Filter> FILTERS = new java.util.HashMap<>();
+    static {
+        FILTERS.put("bass", new Filter(new float[]{ 2, 1, 0, 0, 0 }, 750, 0, 0, -1));
+        FILTERS.put("wide", new Filter(new float[]{ 0, 0, 0, 0, 0 }, 0, 850, 0, -1));
+        FILTERS.put("loud", new Filter(new float[]{ 0, 0, 0, 0, 0 }, 0, 0, 700, -1));
+        FILTERS.put("warm", new Filter(new float[]{ 3, 2, 0, -2, -4 }, 0, 0, 0, -1));
+        FILTERS.put("lofi", new Filter(new float[]{ -8, -2, 3, -2, -9 }, 0, 0, 0, -1));
+        FILTERS.put("radio", new Filter(new float[]{ -12, -6, 4, 4, -8 }, 0, 0, 0, -1));
+        FILTERS.put("room", new Filter(new float[]{ 0, 0, 0, 0, 0 }, 0, 0, 0, PresetReverb.PRESET_MEDIUMROOM));
+        FILTERS.put("hall", new Filter(new float[]{ 0, 0, 0, 0, 0 }, 0, 0, 0, PresetReverb.PRESET_LARGEHALL));
+        FILTERS.put("club", new Filter(new float[]{ 3, 1, 0, 0, 2 }, 800, 500, 500, -1));
+    }
+    private static String filterName = "none";
+    private static PresetReverb reverb;
+    private static Filter filter() { return pro ? FILTERS.get(filterName) : null; } // null = no filter
 
     private NativePlayer() { }
 
@@ -154,6 +180,7 @@ final class NativePlayer {
         if (d.mp == null) return;
         d.ready = true;
         try { d.eq = new Equalizer(0, d.mp.getAudioSessionId()); d.eq.setEnabled(true); applyEq(d); } catch (Exception ignored) { d.eq = null; }
+        applyFilterFx(d);
         applyRg(d);
         if (d.onReady != null) { Runnable r = d.onReady; d.onReady = null; r.run(); return; }
         if (d != main) return;
@@ -316,11 +343,12 @@ final class NativePlayer {
 
     static void setDucked(boolean d) { ducked = d; applyVolume(); }
 
-    static void setFx(boolean pro_, boolean eq_, float[] g, int xf, boolean rg_, boolean slow_) {
-        pro = pro_; eqOn = pro_ && eq_; xfade = pro_ ? Math.max(0, xf) : 0; rgOn = rg_; slowOn = slow_;
+    static void setFx(boolean pro_, boolean eq_, float[] g, int xf, boolean rg_, boolean slow_, String filter_) {
+        pro = pro_; eqOn = pro_ && eq_; xfade = pro_ ? Math.max(0, xf) : 0; rgOn = rg_; slowOn = slow_; filterName = filter_ == null ? "none" : filter_;
         for (int i = 0; i < 5 && g != null && i < g.length; i++) gains[i] = g[i];
         if (main != null) applyEq(main);
         if (outgoing != null) applyEq(outgoing);
+        applyFilterFx(main); applyFilterFx(outgoing); applyFilterFx(gap);
         applyRg(main); applyRg(outgoing); applyRg(gap);
     }
 
@@ -342,7 +370,9 @@ final class NativePlayer {
             for (short b = 0; b < bands; b++) {
                 double centre = d.eq.getCenterFreq(b) / 1000.0, best = Double.MAX_VALUE; int pick = 0; // nearest of our five bands, in octaves
                 for (int k = 0; k < 5; k++) { double dist = Math.abs(Math.log(centre / EQ_FREQS[k])); if (dist < best) { best = dist; pick = k; } }
-                int mb = eqOn ? Math.round(gains[pick] * 100f) : 0;
+                Filter f = filter();
+                float g = (eqOn ? gains[pick] : 0f) + (f != null ? f.eq[pick] : 0f);
+                int mb = Math.round(Math.max(-12f, Math.min(12f, g)) * 100f);
                 d.eq.setBandLevel(b, (short) Math.max(range[0], Math.min(range[1], mb)));
             }
         } catch (Exception ignored) { }
@@ -439,14 +469,41 @@ final class NativePlayer {
         }).start();
     }
 
+    /** The phone's own effects for the chosen sound filter: bass boost, virtualizer (a wider stage) and a reverb room. */
+    private static void applyFilterFx(Deck d) {
+        if (d == null || d.mp == null || !d.ready) return;
+        Filter f = filter();
+        int sid = d.mp.getAudioSessionId();
+        try {
+            int b = f != null ? f.bass : 0;
+            if (b > 0 && d.bb == null) d.bb = new BassBoost(0, sid);
+            if (d.bb != null) { if (b > 0) d.bb.setStrength((short) b); d.bb.setEnabled(b > 0); }
+        } catch (Exception ignored) { }
+        try {
+            int w = f != null ? f.wide : 0;
+            if (w > 0 && d.vz == null) d.vz = new Virtualizer(0, sid);
+            if (d.vz != null) { if (w > 0) d.vz.setStrength((short) w); d.vz.setEnabled(w > 0); }
+        } catch (Exception ignored) { }
+        try {
+            if (f != null && f.reverb >= 0) {
+                if (reverb == null) reverb = new PresetReverb(0, 0);
+                reverb.setPreset((short) f.reverb); reverb.setEnabled(true);
+                if (!d.aux) { d.mp.attachAuxEffect(reverb.getId()); d.aux = true; }
+                d.mp.setAuxEffectSendLevel(1f);
+            } else if (d.aux) d.mp.setAuxEffectSendLevel(0f);
+        } catch (Exception ignored) { }
+    }
+
     private static void applyRg(Deck d) {
         if (d == null || d.mp == null) return;
         float db = rgOn && d.rgDb != null ? Math.max(-15f, Math.min(6f, d.rgDb)) : 0f;
         d.rg = db < 0 ? (float) Math.pow(10, db / 20.0) : 1f; // quieter songs are turned down...
         if (d.ready) {
             try { // ...and a song that is quieter than average is lifted a little by the loudness enhancer
-                if (db > 0 && d.le == null) { d.le = new LoudnessEnhancer(d.mp.getAudioSessionId()); }
-                if (d.le != null) { d.le.setTargetGain(Math.round(Math.max(0f, db) * 100f)); d.le.setEnabled(db > 0); }
+                Filter f = filter();
+                int mb = Math.round(Math.max(0f, db) * 100f) + (f != null ? f.loud : 0);
+                if (mb > 0 && d.le == null) { d.le = new LoudnessEnhancer(d.mp.getAudioSessionId()); }
+                if (d.le != null) { d.le.setTargetGain(mb); d.le.setEnabled(mb > 0); }
             } catch (Exception ignored) { }
         }
         if (d == main) applyVolume();
