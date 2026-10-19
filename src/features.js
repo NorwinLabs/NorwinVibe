@@ -83,7 +83,7 @@ prefsReady.then((p) => { P = p; pinned = p.pin; sleepEnds = p.sleepEnds || 0; sh
 
 /* ---------- theme store ---------- */
 const STORE_UI = {
-  pro: { blurb: 'Every theme pack, now and in the future, plus the Pro features. One purchase, on both Windows and Android.', parts: ['All theme packs', 'Listening stats', 'Time-of-day themes', 'Sleep fade-out', 'Screensaver', 'OBS overlay', 'Discord status', 'Equalizer & crossfade', 'Playlists', 'Smart shuffle', 'Lock screen & widget'], apply: {} },
+  pro: { blurb: 'Every theme pack, now and in the future, plus the Pro features. One purchase, on both Windows and Android.', parts: ['All theme packs', 'Listening stats', 'Time-of-day themes', 'Sleep fade-out', 'Screensaver', 'OBS overlay', 'Discord status', 'Equalizer, sound filters & crossfade', 'Playlists', 'Smart shuffle', 'Lock screen & widget'], apply: {} },
   cyberpunk: { blurb: 'Neon-soaked card theme, circuit-etched record, plasma needle and a glitch-wave visualizer.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],
     apply: { theme: 'cyberpunk', record: 'cyber', needle: 'cyber', viz: 'cyber' } },
   nightcity: { blurb: 'Dystopian terminal look: black glass, hot red neon lines, glowing cyan light bars, data-grid overlays, scratches and a glitching HUD.', parts: ['Card theme', 'Record', 'Needle', 'Visualizer'],

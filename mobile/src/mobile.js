@@ -316,8 +316,12 @@
   /* ---- equalizer + crossfade (Pro). The Web Audio graph is only built once one of them is switched on. ---- */
   const EQ_FREQS = [60, 230, 910, 3600, 14000];
   const PRESETS = { flat: [0, 0, 0, 0, 0], bass: [7, 4, 0, -1, -2], vocal: [-2, -1, 3, 3, 0], treble: [-2, 0, 0, 3, 6], rock: [5, 3, -2, 2, 4], soft: [-3, -1, 1, 2, -2] };
-  let fx = Object.assign({ eq: false, gains: [0, 0, 0, 0, 0], xfade: 0, preset: 'flat' }, LS.get('vibe.fx', {}));
-  const fxActive = () => entitled.has('pro') && (fx.eq || fx.xfade > 0);
+  /* sound filters (Pro): the native player adds the phone's own effects (bass boost, wider stage, reverb room, loudness) on top of this
+     equalizer tilt (see NativePlayer.java); the Web Audio fallback uses the tilt and, for "loud", a gain */
+  const FILTERS = { none: [0, 0, 0, 0, 0], bass: [5, 3, 0, 0, 0], wide: [0, 0, 0, 0, 0], loud: [0, 0, 0, 0, 0], warm: [3, 2, 0, -2, -4], lofi: [-8, -2, 3, -2, -9], radio: [-12, -6, 4, 4, -8], room: [0, 0, 0, 0, 0], hall: [0, 0, 0, 0, 0], club: [4, 2, 0, 0, 2] };
+  let fx = Object.assign({ eq: false, gains: [0, 0, 0, 0, 0], xfade: 0, preset: 'flat', filter: 'none' }, LS.get('vibe.fx', {}));
+  if (!(fx.filter in FILTERS)) fx.filter = 'none';
+  const fxActive = () => entitled.has('pro') && (fx.eq || fx.xfade > 0 || fx.filter !== 'none');
   let ctx = null, deckGain = [], filters = [], master = null;
   function ensureGraph() {
     if (ctx) return true;
@@ -331,10 +335,16 @@
       applyEq(); return true;
     } catch { ctx = null; return false; }
   }
-  function applyEq() { pushFx(); if (ctx) filters.forEach((f, i) => { f.gain.value = entitled.has('pro') && fx.eq ? fx.gains[i] : 0; }); }
+  function applyEq() {
+    pushFx();
+    if (!ctx) return;
+    const pro = entitled.has('pro'), tilt = pro ? FILTERS[fx.filter] || FILTERS.none : FILTERS.none;
+    filters.forEach((f, i) => { f.gain.value = Math.max(-12, Math.min(12, (pro && fx.eq ? fx.gains[i] : 0) + tilt[i])); });
+    master.gain.value = pro && fx.filter === 'loud' ? 1.3 : pro && fx.filter === 'club' ? 1.15 : 1;
+  }
   const resumeCtx = () => (ctx && ctx.state === 'suspended' ? ctx.resume().catch(() => {}) : Promise.resolve());
 
-  const fxPayload = () => ({ pro: entitled.has('pro'), eq: !!fx.eq, gains: fx.gains, xfade: fx.xfade, rg: prefs.replaygain !== false, slow: prefs.recordstop !== false });
+  const fxPayload = () => ({ pro: entitled.has('pro'), eq: !!fx.eq, gains: fx.gains, xfade: fx.xfade, rg: prefs.replaygain !== false, slow: prefs.recordstop !== false, filter: entitled.has('pro') ? fx.filter : 'none' });
   const pushFx = () => { if (nativeLive) bg.setFx(fxPayload()).catch(() => {}); };
   async function sendQueue(i, autoplay, pos) { // hand the native player the play order (once per order) and start song `i`
     if (nativeLive && nativeVer === orderVer) { await bg.playIndex({ index: i, autoplay, position: pos, ...fxPayload() }); return; }
@@ -927,12 +937,13 @@
   const clampGain = (v) => Math.max(-12, Math.min(12, Number(v) || 0));
   window.vibeFx = {
     supported: true, presets: PRESETS,
-    get: () => ({ eq: !!fx.eq, gains: fx.gains.slice(), xfade: fx.xfade, preset: fx.preset, pro: entitled.has('pro'), freqs: EQ_FREQS }),
+    get: () => ({ eq: !!fx.eq, gains: fx.gains.slice(), xfade: fx.xfade, preset: fx.preset, filter: fx.filter, filters: Object.keys(FILTERS), pro: entitled.has('pro'), freqs: EQ_FREQS }),
     set(patch) {
       if (!entitled.has('pro')) return false;
       if ('eq' in patch) fx.eq = !!patch.eq;
       if ('gains' in patch && Array.isArray(patch.gains) && patch.gains.length === 5) fx.gains = patch.gains.map(clampGain);
       if ('preset' in patch) fx.preset = String(patch.preset);
+      if ('filter' in patch && patch.filter in FILTERS) fx.filter = patch.filter;
       if ('xfade' in patch) fx.xfade = Math.max(0, Math.min(12, Math.round(Number(patch.xfade) || 0)));
       LS.set('vibe.fx', fx);
       if (fxActive()) { ensureGraph(); resumeCtx(); }

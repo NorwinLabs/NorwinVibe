@@ -56,6 +56,8 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
     <button class="sw" id="eq-on"><span>Equalizer</span><i></i></button>
     <div class="chips" id="eq-presets"></div>
     <div id="eq-bands"></div>
+    <h4>Sound filter</h4>
+    <div class="chips" id="eq-filters"></div>
     <h4>Crossfade</h4>
     <div class="vol-row"><input type="range" id="xf" min="0" max="12" step="1" value="0"><span id="xf-n">Off</span></div>
     <p class="hint">Blends the end of a song into the next one. Songs shorter than about 2.5 times the fade are left alone.</p>
