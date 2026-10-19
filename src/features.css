@@ -157,10 +157,10 @@ body.fullscreen { padding: 0; }
 .ambient .lyric { display: block; margin: 18px auto 0; max-width: calc(1100px * var(--ui, 1)); min-height: calc(52px * var(--ui, 1)); font-size: calc(30px * var(--ui, 1)); font-style: normal; font-weight: 600; line-height: 1.25;
   color: #fff; white-space: normal; text-wrap: balance; text-shadow: 0 2px 28px rgba(0,0,0,.45); }
 .ambient .glow { inset: -10px; filter: blur(60px); }
-.ambient .top, .ambient .controls, .ambient .progress .time { transition: opacity .7s; }
+.fullscreen .top, .fullscreen .controls, .fullscreen .progress .time { transition: opacity .6s; }
 .ambient .progress { opacity: .85; }
-.ambient.idle-ui .top, .ambient.idle-ui .controls, .ambient.idle-ui .progress .time { opacity: 0; pointer-events: none; }
-.ambient.idle-ui, .ambient.idle-ui * { cursor: none !important; }
+.fullscreen.idle-ui .top, .fullscreen.idle-ui .controls, .fullscreen.idle-ui .progress .time { opacity: 0; pointer-events: none; }
+.fullscreen.idle-ui, .fullscreen.idle-ui * { cursor: none !important; }
 .fullscreen .progress { grid-area: progress; }
 .fullscreen .controls { grid-area: controls; }
 .fullscreen .lyrics::before, .fullscreen .lyrics::after { content: ""; display: block; height: 45%; }

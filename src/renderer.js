@@ -376,9 +376,10 @@ function drawViz(t, playing) {
   // a bass pulse: a soft halo behind the ring that swells with the low end
   let bass = 0; for (let i = 0; i < 8; i++) bass += levels[i]; bass /= 8;
   if (bass > .02) {
-    const hp = vctx.createRadialGradient(c, c, base * .9, c, c, base + maxLen * (1.1 + bass));
+    const hr = Math.min(c, base + maxLen * (1.1 + bass)); // (never wider than the canvas, or its edge shows as a hard line)
+    const hp = vctx.createRadialGradient(c, c, base * .9, c, c, hr);
     hp.addColorStop(0, a1); hp.addColorStop(1, 'rgba(0,0,0,0)');
-    vctx.globalAlpha = Math.min(.55, bass * .6); vctx.fillStyle = hp; vctx.beginPath(); vctx.arc(c, c, base + maxLen * (1.1 + bass), 0, Math.PI * 2); vctx.fill();
+    vctx.globalAlpha = Math.min(.55, bass * .6); vctx.fillStyle = hp; vctx.beginPath(); vctx.arc(c, c, hr, 0, Math.PI * 2); vctx.fill();
   }
 
   // (no shadowBlur anywhere: it is by far the slowest thing a canvas can do. A wider, fainter stroke underneath gives the same glow.)

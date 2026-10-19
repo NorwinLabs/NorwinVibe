@@ -593,11 +593,15 @@ function fitStage() {
   root.style.setProperty('--amb', Math.max(1, Math.min(mode === 'ambient' ? 4.2 : 3.6, h / 250, w / 310)).toFixed(2));
   fitTitle();
 }
-function bumpIdle() { // ambient hides its UI (and the cursor) after a few idle seconds
-  if (mode !== 'ambient') return;
+function bumpIdle(e, wait = 3000) { // full screen and ambient fade out their controls (and the cursor) when the mouse rests or leaves
+  if (mode === 'none') return;
   document.body.classList.remove('idle-ui'); clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => document.body.classList.add('idle-ui'), 3000);
+  idleTimer = setTimeout(function hide() {
+    if (el.card.querySelector('.top:hover, .controls:hover, .progress:hover')) { idleTimer = setTimeout(hide, 1000); return; } // the mouse is on them: keep them
+    document.body.classList.add('idle-ui');
+  }, wait);
 }
+document.documentElement.addEventListener('mouseleave', () => { if (mode !== 'none') { clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle-ui'), 350); } }); // mouse left the window
 function setMode(next) {
   if (next === mode) return;
   if (next !== 'none' && mini) { setMini(false); setTimeout(() => setMode(next), 250); return; }
