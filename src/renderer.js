@@ -330,7 +330,7 @@ prefsReady.then((p) => setMini(p.mini, false));
 
 /* ---------- audio-reactive ring (system loopback; falls back to a soft synthetic pulse) ---------- */
 const BARS = 72;
-let analyser = null, freq = null;
+let analyser = null, freq = null, binHz = 46.875;
 const levels = new Float32Array(BARS);
 async function initAudio() {
   try {
@@ -338,12 +338,36 @@ async function initAudio() {
     stream.getVideoTracks().forEach((t) => t.stop());
     if (!stream.getAudioTracks().length) return;
     const ctx = new AudioContext();
-    analyser = ctx.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = .78;
+    analyser = ctx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = .5; analyser.minDecibels = -88; analyser.maxDecibels = -22; // quick to move, wide range
     ctx.createMediaStreamSource(stream).connect(analyser); // analysis only, never routed to speakers
-    freq = new Uint8Array(analyser.frequencyBinCount);
+    freq = new Uint8Array(analyser.frequencyBinCount); binHz = ctx.sampleRate / analyser.fftSize; barBins = null;
   } catch { analyser = null; }
 }
 if (window.api && !window.api.noLoopback) initAudio();
+
+/* The ring listens to the music in three ways: every bar follows its own slice of the spectrum (log-spaced, the loudest bin in the slice),
+   `kick` is the bass (40-180 Hz) with a fast attack so the whole ring lunges on each hit, and `voice` is the vocal range (300-3400 Hz),
+   which swells a thin inner ring and lifts the bars that sit in that range. Each band is normalised against its own recent peak, so
+   quiet and loud music move the ring the same amount. */
+let barBins = null; // per bar: [first bin, last bin]
+const band = { bass: .3, voc: .25, kick: 0, punch: 0, voice: 0, last: 0 }; // bass / voc: recent peaks (adaptive gain)
+const binsFor = (lo, hi) => [Math.max(1, Math.round(lo / binHz)), Math.max(2, Math.round(hi / binHz))];
+const bandAvg = (r) => { let sum = 0; for (let i = r[0]; i <= r[1]; i++) sum += freq[i]; return sum / ((r[1] - r[0] + 1) * 255); };
+function listen(t, playing) {
+  if (!playing) { band.kick *= .8; band.punch *= .7; band.voice *= .85; return; }
+  let kick, voice;
+  if (analyser) {
+    analyser.getByteFrequencyData(freq);
+    if (!barBins) { const half = BARS / 2; barBins = Array.from({ length: half }, (_, m) => { const f0 = 45 * Math.pow(9000 / 45, m / half), f1 = 45 * Math.pow(9000 / 45, (m + 1) / half); return binsFor(f0, Math.max(f1, f0 + binHz)); }); }
+    const bass = bandAvg(binsFor(40, 180)), voc = bandAvg(binsFor(300, 3400));
+    band.bass = Math.max(band.bass * .995, bass, .1); band.voc = Math.max(band.voc * .995, voc, .08); // slow-falling peaks
+    kick = Math.min(1, bass / band.bass); voice = Math.min(1, voc / band.voc);
+  } else { // no real audio (the phone): a soft synthetic pulse around 120 bpm
+    const ph = (t % 500) / 500; kick = Math.exp(-ph * 5) * .9; voice = .45 + .3 * Math.sin(t / 900);
+  }
+  const k = kick > band.kick ? .85 : .16; band.punch = Math.max(band.punch * .8, Math.max(0, kick - band.kick) * 2.4); // punch: the jump on a new hit
+  band.kick += (kick - band.kick) * k; band.voice += (voice - band.voice) * (voice > band.voice ? .5 : .12);
+}
 
 let calmMode = false; // Calm mode: no spin, no moving ring (set from extras.js)
 el.viz.width = el.viz.height = Math.round(320 * Math.min(2, window.devicePixelRatio || 1)); // one canvas pixel per screen pixel, no more
@@ -355,16 +379,23 @@ function drawViz(t, playing) {
   vctx.setTransform(el.viz.width / W, 0, 0, el.viz.width / W, 0, 0);
   vctx.clearRect(0, 0, W, W);
   if (mode === 'off' || calmMode) return;
-  if (analyser && playing) analyser.getByteFrequencyData(freq);
+  listen(t, playing);
+  const half = BARS / 2;
   for (let i = 0; i < BARS; i++) {
-    const m = i < BARS / 2 ? i : BARS - 1 - i; // mirror so the ring is symmetric
+    const m = i < half ? i : BARS - 1 - i; // mirror so the ring is symmetric
     let v = 0;
     if (playing) {
-      if (analyser) v = freq[2 + Math.floor((m / (BARS / 2)) ** 1.6 * 90)] / 255;
-      else v = .42 + .38 * Math.sin(t / 260 + m * .55) * Math.sin(t / 700 + m * .2);
-      v = Math.min(1, v * 1.3); // a livelier ring: quiet music still moves it
+      if (analyser && barBins) {
+        const r = barBins[Math.min(half - 1, m)]; let peak = 0; for (let b = r[0]; b <= r[1]; b++) if (freq[b] > peak) peak = freq[b];
+        v = peak / 255;
+        v = Math.pow(v, 1.15) * (1 + (m / half) * .9); // the highs are naturally quieter: lift them so the whole ring moves
+        const f = 45 * Math.pow(9000 / 45, (m + .5) / half); // this bar's frequency
+        if (f > 300 && f < 3400) v += band.voice * .3 * v + band.voice * .12; // vocal bars swell with the voice
+        if (f < 220) v *= .75 + band.kick * .55; // bass bars lunge with the kick
+        v = Math.min(1, v * (1 + band.punch * .35)); // everything jumps a little on a new hit
+      } else v = Math.min(1, (.3 + .5 * band.kick + .25 * Math.sin(t / 260 + m * .55) * Math.sin(t / 700 + m * .2)) * 1.2);
     }
-    levels[i] += (v - levels[i]) * (v > levels[i] ? .5 : .12);
+    levels[i] += (v - levels[i]) * (v > levels[i] ? .8 : .22); // snap up, fall quickly
   }
   const base = W * vizRatio;
   const maxLen = c - base - (mode === 'cyber' ? 14 : mode === 'nightcity' ? 6 : 3); // keep everything inside the canvas
@@ -374,7 +405,7 @@ function drawViz(t, playing) {
   const g = vctx.createLinearGradient(0, 0, W, W); g.addColorStop(0, a1); g.addColorStop(1, a2);
   vctx.lineCap = 'round'; vctx.lineJoin = 'round';
   // a bass pulse: a soft halo behind the ring that swells with the low end
-  let bass = 0; for (let i = 0; i < 8; i++) bass += levels[i]; bass /= 8;
+  const bass = Math.min(1, band.kick * .85 + band.punch * .4);
   if (bass > .02) {
     const hr = Math.min(c, base + maxLen * (1.1 + bass)); // (never wider than the canvas, or its edge shows as a hard line)
     const hp = vctx.createRadialGradient(c, c, base * .9, c, c, hr);
@@ -382,6 +413,10 @@ function drawViz(t, playing) {
     vctx.globalAlpha = Math.min(.55, bass * .6); vctx.fillStyle = hp; vctx.beginPath(); vctx.arc(c, c, hr, 0, Math.PI * 2); vctx.fill();
   }
 
+  if (playing && (mode === 'bars' || mode === 'dots' || mode === 'wave')) { // the voice: a thin ring that swells and brightens with the vocals
+    vctx.strokeStyle = a2; vctx.globalAlpha = .18 + band.voice * .5; vctx.lineWidth = 2 + band.voice * 6;
+    vctx.beginPath(); vctx.arc(c, c, base + 4 + band.voice * 9 + band.punch * 6, 0, Math.PI * 2); vctx.stroke();
+  }
   // (no shadowBlur anywhere: it is by far the slowest thing a canvas can do. A wider, fainter stroke underneath gives the same glow.)
   if (mode === 'bars') {
     const glow = new Path2D(), tiers = [new Path2D(), new Path2D(), new Path2D(), new Path2D()]; // bars grouped by loudness, so a frame is a handful of strokes, not 72
@@ -390,7 +425,7 @@ function drawViz(t, playing) {
       p.moveTo(x1, y1); p.lineTo(x2, y2); glow.moveTo(x1, y1); glow.lineTo(x2, y2);
     }
     vctx.strokeStyle = g; vctx.lineWidth = 18; vctx.globalAlpha = .16; vctx.stroke(glow);
-    vctx.lineWidth = 8; tiers.forEach((p, k) => { vctx.globalAlpha = .45 + k * .18; vctx.stroke(p); });
+    vctx.lineWidth = 8 + band.punch * 4; tiers.forEach((p, k) => { vctx.globalAlpha = .45 + k * .18; vctx.stroke(p); });
   } else if (mode === 'dots') {
     const tiers = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
     for (let i = 0; i < BARS; i++) { const [x, y] = at(i, base + 6 + levels[i] * (maxLen - 8)), p = tiers[Math.min(3, (levels[i] * 4) | 0)]; p.moveTo(x + 4 + levels[i] * 7, y); p.arc(x, y, 4 + levels[i] * 7, 0, Math.PI * 2); }

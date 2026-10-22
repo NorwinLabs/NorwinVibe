@@ -120,6 +120,9 @@ public class MediaPlaybackService extends Service {
         lastPlaying = playing;
         MediaPlaybackService i = inst;
         if (i != null && (playing || System.currentTimeMillis() - i.focusPauseAt > 1500)) i.pausedByFocus = false;
+        if (i != null && playing) i.takeFocus(); // (playing again after the speaker was given back: ask for it again)
+        // Paused by the user (not by a call or other media): give the speaker back, so other apps can start or resume their own sound
+        if (i != null && !playing) i.handler.postDelayed(() -> { if (!lastPlaying && !i.pausedByFocus) i.dropFocus(); }, 1500);
     }
     /** The native player is about to make sound: take audio focus (and watch for headphones being unplugged). */
     static void focus() { if (inst != null) inst.takeFocus(); }
@@ -224,6 +227,17 @@ public class MediaPlaybackService extends Service {
     private boolean pausedByFocus = false, ducked = false, focusHeld = false;
     private long focusPauseAt = 0;
     private boolean focusPauseCall = false;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    /* While paused by something else, watch for a phone call (the audio mode becomes ring / call / communication). Calls resume the music
+       when they end however long they were; an alarm or other media does not. (No phone permission needed: it only reads the audio mode.) */
+    private final Runnable callWatch = new Runnable() {
+        @Override public void run() {
+            if (!pausedByFocus) return;
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) { int md = am.getMode(); if (md == AudioManager.MODE_IN_CALL || md == AudioManager.MODE_IN_COMMUNICATION || md == AudioManager.MODE_RINGTONE) focusPauseCall = true; }
+            handler.postDelayed(this, 700);
+        }
+    };
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) command("pause", 0);
@@ -235,10 +249,11 @@ public class MediaPlaybackService extends Service {
                 if (!lastPlaying) break; // not playing: there is nothing to pause, and nothing to resume afterwards
                 AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
                 focusPauseCall = am != null && am.getMode() != AudioManager.MODE_NORMAL; // a phone call: worth resuming after, however long it was
-                pausedByFocus = true; focusPauseAt = System.currentTimeMillis(); command("pause", 0); break;
+                pausedByFocus = true; focusPauseAt = System.currentTimeMillis(); command("pause", 0);
+                handler.removeCallbacks(callWatch); handler.postDelayed(callWatch, 300); break;
             }
             case AudioManager.AUDIOFOCUS_LOSS:
-                pausedByFocus = false; command("pause", 0); break;
+                pausedByFocus = false; focusHeld = false; command("pause", 0); break; // another app took the speaker for good (its own music or video): stay paused, and ask for focus again when played
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                 ducked = true; command("duck", 0); break;
             case AudioManager.AUDIOFOCUS_GAIN:
