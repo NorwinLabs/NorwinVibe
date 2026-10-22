@@ -10,6 +10,8 @@ const fs = require('fs');
 
 const SKIP = /^(merge\b|chore\b|revert\b|ci\b|build\b|docs?\b|test\b|wip\b)/i;
 
+const MAX_BULLETS = 40, MAX_CHARS = 3500; // the text goes on a command line (Windows allows about 8000 characters), so it must stay short even if the tag is not found
+
 function bullets(commits) { // [{ subject, body }] -> markdown bullets (newest first, no duplicates)
   const seen = new Set(), out = [];
   for (const c of commits) {
@@ -20,12 +22,14 @@ function bullets(commits) { // [{ subject, body }] -> markdown bullets (newest f
     t = t.charAt(0).toUpperCase() + t.slice(1);
     if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(`- ${t}`); }
   }
-  return out.length ? out.join('\n') + '\n' : '- Small fixes and improvements\n';
+  let text = out.slice(0, MAX_BULLETS).join('\n');
+  if (text.length > MAX_CHARS) text = text.slice(0, MAX_CHARS).replace(/\n[^\n]*$/, ''); // cut at a whole bullet
+  return text ? text + '\n' : '- Small fixes and improvements\n';
 }
 
 function commitsSince() {
   const sh = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  let prev = ''; try { prev = sh("git describe --tags --match 'v*' --abbrev=0"); } catch { /* no release yet */ }
+  let prev = ''; try { prev = sh('git describe --tags --match "v*" --abbrev=0'); } catch { /* no release yet */ }
   const range = prev ? `${prev}..HEAD` : 'HEAD';
   let raw = ''; try { raw = sh(`git log --no-merges --pretty=format:%s%x1f%b%x1e ${range}`); } catch { /* shallow clone etc. */ }
   return raw.split('\x1e').map((r) => r.trim()).filter(Boolean).map((r) => { const [subject, body] = r.split('\x1f'); return { subject, body }; });
