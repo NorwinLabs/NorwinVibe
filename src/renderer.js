@@ -292,7 +292,7 @@ window.addEventListener('keydown', (e) => {
 
 /* scrubbing */
 const fracFromEvent = (e) => { const r = el.bar.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
-el.bar.addEventListener('pointerdown', (e) => { dragging = true; el.bar.classList.add('drag'); el.bar.setPointerCapture(e.pointerId); dragFrac = fracFromEvent(e); });
+el.bar.addEventListener('pointerdown', (e) => { if (!st.active || !(st.dur > 0) || st.canSeek === false) return; /* nothing to scrub (no length): a drag must not become "go to 0" */ dragging = true; el.bar.classList.add('drag'); el.bar.setPointerCapture(e.pointerId); dragFrac = fracFromEvent(e); });
 el.bar.addEventListener('pointermove', (e) => { if (dragging) dragFrac = fracFromEvent(e); });
 el.bar.addEventListener('pointerup', (e) => { if (!dragging) return; dragging = false; el.bar.classList.remove('drag'); seekTo(fracFromEvent(e) * st.dur); });
 

@@ -187,7 +187,7 @@ final class NativePlayer {
         errorsInRow = 0;
         applyVolume();
         try {
-            if (startPos > 0) d.mp.seekTo((int) startPos);
+            if (startPos > 0) seekExact(d, startPos);
             if (wantPlay) { d.mp.start(); playing = true; MediaPlaybackService.focus(); }
         } catch (Exception ignored) { }
         startPos = 0;
@@ -285,8 +285,15 @@ final class NativePlayer {
         push(true);
     }
 
+    /** Jump to `ms`. SEEK_CLOSEST matters: the default (the nearest earlier sync point) lands at the very start of files with few sync points (many FLAC, WAV, M4A songs). */
+    private static void seekExact(Deck d, long ms) {
+        int t = (int) Math.max(0, ms);
+        try { if (Build.VERSION.SDK_INT >= 26) d.mp.seekTo(t, MediaPlayer.SEEK_CLOSEST); else d.mp.seekTo(t); } catch (Exception ignored) { }
+    }
+
     static void seek(long ms) {
-        if (main != null && main.ready) { try { main.mp.seekTo((int) Math.max(0, ms)); } catch (Exception ignored) { } }
+        if (main != null && main.ready) seekExact(main, ms);
+        else if (main != null) startPos = Math.max(0, ms); // still opening the song: start there
         push(true);
     }
 
@@ -391,7 +398,7 @@ final class NativePlayer {
         }
         try {
             if (playing && loopB > loopA) { // A-B repeat
-                if (d.mp.getCurrentPosition() >= loopB) d.mp.seekTo((int) loopA);
+                if (d.mp.getCurrentPosition() >= loopB) seekExact(d, loopA);
             } else if (playing && xfade == 0 && gap == null && !fadePending && gapFailedFor != index && !"Track".equals(repeat) && Build.VERSION.SDK_INT >= 16) {
                 int dur0 = d.mp.getDuration(), pos0 = d.mp.getCurrentPosition(), n0 = nextIndex();
                 if (dur0 > 0 && dur0 - pos0 < 12000 && n0 >= 0 && !queue.get(n0).path.isEmpty()) prepareGap(n0); // get the next song ready early so it follows without a pause
