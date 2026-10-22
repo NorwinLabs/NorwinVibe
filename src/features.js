@@ -360,11 +360,10 @@ function measureArmFlat() {
   armTip = [vx * ca - vy * sa, vx * sa + vy * ca];
   const radiusAt = (deg) => { const a = deg * Math.PI / 180, c = Math.cos(a), n = Math.sin(a);
     return Math.hypot(px + (armTip[0] * c - armTip[1] * n) * s - cx, py + (armTip[0] * n + armTip[1] * c) * s - cy) / s; };
-  // The arm's arc runs from the outer edge in toward the centre and can pass THROUGH the centre to the far (top) side.
-  // Always take the first (near-side) crossing, so the stylus stays on the lower/front half of the record.
-  const tipY = (deg) => { const a = deg * Math.PI / 180; return py + (armTip[0] * Math.sin(a) + armTip[1] * Math.cos(a)) * s; };
-  const solve = (r) => { let last = -10; for (let d = -10; d <= 80; d += 0.05) { if (radiusAt(d) <= r || tipY(d) < cy) return d; last = d; } return last; };
-  armRange = { out: solve(R_OUT), inn: solve(R_IN) }; armRangeAt = performance.now();
+  // The stylus's arc runs from beside the record in toward the centre (and may pass through it). Take the first angle at which it is as close
+  // as asked; if it never gets that close (a small or tall layout), the closest it gets. Never the same angle twice: that would divide by zero.
+  const solve = (r) => { let best = -10, bestR = Infinity; for (let d = -10; d <= 80; d += 0.05) { const rr = radiusAt(d); if (rr <= r) return d; if (rr < bestR) { bestR = rr; best = d; } } return best; };
+  armRange = { out: solve(R_OUT), inn: solve(R_IN) }; if (!(armRange.inn - armRange.out >= 1)) armRange.inn = armRange.out + 1; // (a flat range would make every drag NaN) armRangeAt = performance.now();
 }
 /* Lifting and lowering the stylus: `liftPos` is 0 with the needle in the groove and 1 raised. A small spring moves it, so putting
    it down settles with a tiny bounce and picking it up eases away. Raised = a touch nearer the viewer (bigger, longer shadow). */

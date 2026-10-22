@@ -278,7 +278,8 @@ el.repeat.onclick = () => {
   flagNow('repeat', next, el.repeat, () => { el.repeat.classList.toggle('on', next === 'List' || next === 'Track'); el.repeat.classList.toggle('track', next === 'Track'); });
   send(`repeat:${next}`);
 };
-const seekTo = (s) => { s = Math.max(0, Math.min(st.dur || s, s)); st.pos = s; recvAt = performance.now(); send(`seek:${s.toFixed(2)}`); };
+const seekTo = (s) => { if (!Number.isFinite(s)) return; s = Math.max(0, Math.min(st.dur || s, s)); // (a bad number must never become "go to the start")
+  st.pos = s; recvAt = performance.now(); send(`seek:${s.toFixed(2)}`); };
 
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
