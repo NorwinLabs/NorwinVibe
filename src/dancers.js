@@ -3,7 +3,7 @@
    dance moves locked to the beat (a library of ~35: grooves, disco, robot, dab, floss, jacks, kicks, spins, flips...), and walks on
    to the next spot. Every move is a function of the beat clock, and moves are cross-faded, so nothing ever snaps. The harder the
    music hits, the bigger the moves he picks. When the music stops he walks back and slips behind the record player.
-   Settings > Look: "Dancing pixel guy" (on / off) and "Dancer" (Guy, Robot, Alien). */
+   Settings > Look: "Dancing pixel guy" (on / off) and "Dancer" (Guy, Robot, Alien, and the Pro-only Penguin). */
 (() => {
   const stage = document.getElementById('stage'), card = document.getElementById('card'), tilt = document.getElementById('tilt');
   if (!stage || !card) return;
@@ -107,7 +107,19 @@
     aliens: (g, x, y, a, c) => { g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = c.head; g.beginPath(); g.ellipse(0, .2, 3, 2.5, 0, 0, TAU); g.fill(); g.strokeStyle = c.head; g.lineWidth = .7;
       g.beginPath(); g.moveTo(-1.6, -2); g.lineTo(-2.7, -3.9); g.moveTo(1.6, -2); g.lineTo(2.7, -3.9); g.stroke(); g.fillStyle = c.body; g.beginPath(); g.arc(-2.7, -4, .8, 0, TAU); g.arc(2.7, -4, .8, 0, TAU); g.fill(); g.restore(); },
   };
+  /* ---- the Pro penguin: one little sprite, thrown around by the same pose numbers (hop, lean, spin, flip, knee-dip squash) ---- */
+  const PENG = new Image(); PENG.src = 'data:image/png;base64,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';
+  const PW = 24, PH = 23; // sprite size in art pixels
+  function penguin(g, P) {
+    if (!PENG.complete || !PENG.naturalWidth) return;
+    const reach = Math.max(C(P.lt) * LEN.th + C(P.ls) * LEN.sh, C(P.rt) * LEN.th + C(P.rs) * LEN.sh), sq = clamp(reach / 6.6, .78, 1.08); // knees bend -> he squashes down
+    const air = clamp(P.jump / 12), bx = GX + P.hx, fy = GY - P.jump;
+    g.fillStyle = 'rgba(0,0,0,' + (.32 * (1 - air * .6)) + ')'; g.beginPath(); g.ellipse(bx, GY + .8, 7 * (1 - air * .35) * Math.max(.45, Math.abs(P.turn)), 1.5, 0, 0, TAU); g.fill();
+    g.save(); g.translate(bx, fy); g.rotate(P.rot + (P.lean + P.tilt) * .7); g.scale(P.turn * (1 + (1 - sq) * .6), sq);
+    g.drawImage(PENG, -PW / 2, -PH, PW, PH); g.restore();
+  }
   function figure(g, P, c, pack) {
+    if (pack === 'penguin') return penguin(g, P);
     const th = LEN.th, sh = LEN.sh, to = LEN.to, ua = LEN.ua, fa = LEN.fa;
     // local joints (x right, y down, pelvis at 0,0)
     const kL = [-.9 - S(P.lt) * th, C(P.lt) * th], fL = [kL[0] - S(P.ls) * sh, kL[1] + C(P.ls) * sh];

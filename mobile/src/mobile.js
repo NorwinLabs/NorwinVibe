@@ -24,7 +24,7 @@
     speed: ['slow', 'relaxed', '33', '45'],
     theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
     record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
-    dancerpack: ['people', 'robots', 'aliens'],
+    dancerpack: ['people', 'robots', 'aliens', 'penguin'],
     deckskin: ['dark', 'wood', 'neon'],
     needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
     viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
@@ -75,7 +75,8 @@
     const c = adminCheckCfg();
     try { return !!c && /^[0-9a-f]{64}$/.test(token || '') && toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))) === c; } catch { return false; }
   }
-  const allowed = (k, v) => { for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id); return true; };
+  const PRO_VALUES = { dancerpack: ['penguin'] }; // option values that need Pro itself rather than a theme pack
+  const allowed = (k, v) => { if (PRO_VALUES[k] && PRO_VALUES[k].includes(v)) return entitled.has('pro'); for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id); return true; };
   const savePrefs = () => LS.set('vibe.prefs', prefs);
   const dropLockedChoices = () => { for (const k of Object.keys(ENUMS)) if (k in prefs && !allowed(k, prefs[k])) delete prefs[k]; };
   recompute(); dropLockedChoices();

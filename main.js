@@ -30,7 +30,7 @@ const ENUMS = {
   speed: ['slow', 'relaxed', '33', '45'],
   theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
   record: ['vinyl', 'color', 'album', 'cd', 'cyber', 'nightcity'],
-  dancerpack: ['people', 'robots', 'aliens'],
+  dancerpack: ['people', 'robots', 'aliens', 'penguin'],
   deckskin: ['dark', 'wood', 'neon'],
   needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
   viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
@@ -109,7 +109,9 @@ function recompute() {
   if (win) syncProServices(); // a license being added, removed or expiring starts or stops the Pro services
 }
 const entitlementList = () => [...entitled];
+const PRO_VALUES = { dancerpack: ['penguin'] }; // option values that need Pro itself rather than a theme pack
 const allowed = (k, v) => { // is this option value free, or unlocked by something the user holds a valid license for?
+  if (PRO_VALUES[k] && PRO_VALUES[k].includes(v)) return entitled.has('pro');
   for (const [id, u] of Object.entries(PAID)) if (u[k] && u[k].includes(v)) return entitled.has(id);
   return true;
 };
