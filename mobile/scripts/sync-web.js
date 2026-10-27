@@ -42,12 +42,25 @@ sub('    <div class="lyric" id="lyric"></div>', '    <div class="lyric" id="lyri
 sub('      <button class="wbtn" id="btn-fav"', '      <button class="wbtn" id="btn-library" title="Music library" aria-label="Music library"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 18a3 3 0 11-3-3 3 3 0 013 3zm11-2a3 3 0 11-3-3 3 3 0 013 3z"/></svg></button>\n      <button class="wbtn" id="btn-fav"');
 sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
   <div class="pop" id="pop-library">
-    <div class="lib-head"><b id="lib-count">Library</b><span class="lib-btns"><button class="act" id="lib-add">Find my music</button><button class="act" id="lib-pick" title="Add individual files">Add files</button></span></div>
-    <input id="lib-search" type="search" placeholder="Search songs" spellcheck="false" autocomplete="off">
-    <div class="chips tabs" id="lib-tabs"><button data-v="songs" class="on">Songs</button><button data-v="lists">Playlists</button><button data-v="queue">Queue</button></div>
-    <div class="chips tabs" id="lib-sort" title="Order the songs"><button data-v="name" class="on">A\u2013Z</button><button data-v="added">Last added</button></div>
-    <div class="act-row" id="lib-actions"><button class="act" id="lib-play-all">Play all</button><button class="act" id="lib-shuffle-all">Shuffle</button></div>
-    <div id="lib-list" class="hist"></div>
+    <div class="lib-top">
+      <b class="lib-title">NorwinVibe</b>
+      <span class="lib-top-btns">
+        <button class="lib-ico" id="lib-search-btn" aria-label="Search"><svg viewBox="0 0 24 24"><path d="M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4.2-4.2"/></svg></button>
+        <button class="lib-ico dots" id="lib-menu-btn" aria-label="More options"><svg viewBox="0 0 24 24"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg></button>
+      </span>
+    </div>
+    <input id="lib-search" type="search" placeholder="Search" spellcheck="false" autocomplete="off">
+    <div class="lib-tabs" id="lib-tabs"><button data-v="favs">Favorites</button><button data-v="lists">Playlists</button><button data-v="songs" class="on">Tracks</button><button data-v="albums">Albums</button><button data-v="artists">Artists</button></div>
+    <div class="lib-sheet">
+      <div class="lib-actions" id="lib-actions">
+        <button class="lib-sortbtn" id="lib-sortbtn"><svg viewBox="0 0 24 24"><path d="M7 4v14M3 14l4 4 4-4M13 6h8M13 11h6M13 16h4"/></svg><span id="lib-sortlabel">Artist</span></button>
+        <span class="lib-count" id="lib-count"></span>
+        <button class="lib-circ" id="lib-shuffle-all" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M3 7h3c4 0 5 10 9 10h6M3 17h3c1.7 0 2.8-1.7 3.9-3.6M14 7.5c.4-.3.9-.5 1.4-.5H21M18 4l3 3-3 3M18 14l3 3-3 3"/></svg></button>
+        <button class="lib-circ" id="lib-play-all" aria-label="Play"><svg viewBox="0 0 24 24" class="pfill"><path d="M8 5v14l11-7z"/></svg></button>
+      </div>
+      <div id="lib-list" class="hist"></div>
+    </div>
+    <div hidden><button id="lib-add">Find my music</button><button id="lib-pick">Add files</button></div>
     <input type="file" id="lib-file" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac" multiple hidden>
   </div>
 
@@ -71,6 +84,7 @@ sub('  <!-- theme store -->', `  <!-- mini player: sits at the bottom while a pa
     <button class="mp-btn mp-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6v12M19 6l-9 6 9 6z"/></svg></button>
     <button class="mp-btn mp-play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
     <button class="mp-btn mp-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M18 6v12M5 6l9 6-9 6z"/></svg></button>
+    <button class="mp-btn mp-queue" aria-label="Queue"><svg viewBox="0 0 24 24"><path d="M4 6h13M4 11h13M4 16h6M17 20a2 2 0 100-4 2 2 0 000 4zM19 18v-7l3 1"/></svg></button>
     <div class="mp-bar"><i></i></div>
   </div>
 

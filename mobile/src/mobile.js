@@ -25,7 +25,7 @@
     theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
     record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
     dancerpack: ['people', 'robots', 'aliens', 'penguin'],
-    libsort: ['name', 'added'],
+    libsort: ['name', 'added', 'title'],
     deckskin: ['dark', 'wood', 'neon'],
     needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
     viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
@@ -99,7 +99,9 @@
 
   let lib = []; // track metadata, sorted by artist then title (or newest first)
   const byName = (a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title);
-  const sortLib = () => lib.sort(prefs.libsort === 'added' ? (a, b) => (b.added || 0) - (a.added || 0) || byName(a, b) : byName); // Library > Songs: A-Z, or newest first
+  const byTitle = (a, b) => a.title.localeCompare(b.title) || byName(a, b);
+  const SORTS = { added: 'Date added', title: 'Title', name: 'Artist' };
+  const sortLib = () => lib.sort(prefs.libsort === 'added' ? (a, b) => (b.added || 0) - (a.added || 0) || byName(a, b) : prefs.libsort === 'title' ? byTitle : byName); // Tracks: newest first, by title, or by artist
   const libReady = dbDo('meta', 'readonly', (s) => s.getAll()).then((all) => { lib = all || []; sortLib(); }).catch(() => {});
 
   const readTags = (file) => new Promise((res) => {
@@ -308,7 +310,7 @@
     }
     return out;
   }
-  const sourceIds = () => (source.type === 'playlist' ? ((playlists.find((p) => p.id === source.id) || { ids: [] }).ids.filter((id) => lib.some((t) => t.id === id))) : lib.map((t) => t.id));
+  const sourceIds = () => (source.type === 'ids' ? source.ids.filter((id) => lib.some((t) => t.id === id)) : source.type === 'playlist' ? ((playlists.find((p) => p.id === source.id) || { ids: [] }).ids.filter((id) => lib.some((t) => t.id === id))) : lib.map((t) => t.id));
   function buildOrder(startId) {
     let ids = sourceIds();
     if (shuffle) {
@@ -801,7 +803,7 @@
   function openLibrary() { if (typeof togglePop === 'function') { if (!$('pop-library').classList.contains('open')) togglePop('library'); } renderLibrary(); }
   const ago = (ms) => { // "today", "3 days ago", "2 months ago"
     if (!ms) return ''; const d = Math.floor((Date.now() - ms) / 86400000);
-    return d < 1 ? 'added today' : d < 31 ? `added ${d} day${d === 1 ? '' : 's'} ago` : d < 365 ? `added ${Math.floor(d / 30)} month${Math.floor(d / 30) === 1 ? '' : 's'} ago` : `added ${Math.floor(d / 365)}y ago`;
+    return d < 1 ? 'today' : d < 31 ? `${d} day${d === 1 ? '' : 's'} ago` : d < 365 ? `${Math.floor(d / 30)} month${Math.floor(d / 30) === 1 ? '' : 's'} ago` : `${Math.floor(d / 365)}y ago`;
   };
   const fmt = (s) => { s = Math.round(s || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const iconBtn = (title, path, onclick, cls = 'star') => {
@@ -813,26 +815,80 @@
     const row = document.createElement('div'); row.className = 'hrow' + (cur && cur.id === t.id ? ' now' : '');
     const th = document.createElement('div'); th.className = 'th'; if (t.art) th.style.backgroundImage = `url("${t.art}")`;
     const tx = document.createElement('div'); tx.className = 'tx';
-    const b = document.createElement('b'); b.textContent = t.title; const sp = document.createElement('span'); sp.textContent = [t.artist, t.dur ? fmt(t.dur) : '', libTab === 'songs' && prefs.libsort === 'added' ? ago(t.added) : ''].filter(Boolean).join(' \u00b7 ');
+    const b = document.createElement('b'); b.textContent = t.title; const sp = document.createElement('span'); const plain = libTab === 'queue' || libTab === 'lists'; sp.textContent = [t.artist, plain && t.dur ? fmt(t.dur) : '', !plain && libTab === 'songs' && prefs.libsort === 'added' ? ago(t.added) : ''].filter(Boolean).join(' \u00b7 ');
     tx.append(b, sp); row.append(th, tx); (extra || []).forEach((x) => row.appendChild(x));
     return row;
   }
   const empty = (text) => { const e = document.createElement('div'); e.className = 'empty'; e.textContent = text; listEl.appendChild(e); };
 
+  /* ---- Samsung Music style page: top bar (search, menu), tabs, a sort / shuffle / play row, then the list ---- */
+  const ICON_DOTS = 'M12 5h.01M12 12h.01M12 19h.01';
+  let openGroup = null, curRows = []; // openGroup = { kind: 'album' | 'artist', key } while one album / artist is open
+  const favId = (t) => idOf(t.artist || '', t.title), isFavT = (t) => isFav(favId(t));
+  function toggleFavT(t) {
+    let f = store.get('nv.favs');
+    if (f.some((e) => e.id === favId(t))) { f = f.filter((e) => e.id !== favId(t)); toast('Removed from favourites'); }
+    else { f.unshift({ id: favId(t), title: t.title, artist: t.artist || '', app: 'Library', ts: Date.now(), thumb: t.art || '' }); toast('Added to favourites'); }
+    store.set('nv.favs', f); if (cur && cur.id === t.id) $('btn-fav').classList.toggle('on', isFav(curId));
+    if (libTab === 'favs') renderLibrary();
+  }
+  function popMenu(title, items) { // a little sheet of choices: items = [[label, fn, class?]]
+    const old = document.getElementById('pl-menu'); if (old) old.remove();
+    const m = document.createElement('div'); m.id = 'pl-menu'; m.className = 'pl-menu';
+    if (title) { const h = document.createElement('h4'); h.textContent = title; m.appendChild(h); }
+    items.forEach(([label, fn, cls]) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = (e) => { e.stopPropagation(); m.remove(); fn(); }; m.appendChild(b); }); // (stopPropagation: this button is gone by the time the click reaches the page, which would read as a tap outside and close the panel)
+    document.getElementById('card').appendChild(m);
+  }
+  const rowMenu = (t) => popMenu(t.title, [
+    ['Play next', () => playNext(t.id)],
+    ['Add to a playlist', () => pickPlaylist(t.id)],
+    [isFavT(t) ? 'Remove from favourites' : 'Add to favourites', () => toggleFavT(t)],
+    ['Remove from library', () => { if (confirm(`Remove "${t.title}" from your library?`)) removeTrack(t.id); }],
+    ['Cancel', () => {}],
+  ]);
+  const groupKey = (kind, t) => ((kind === 'album' ? t.album : t.artist) || '').trim().toLowerCase();
+  const groupName = (kind, t) => ((kind === 'album' ? t.album : t.artist) || '').trim() || (kind === 'album' ? 'Unknown album' : 'Unknown artist');
+
   async function renderLibrary() {
     await libReady;
     window.dispatchEvent(new Event('vibe:library'));
-    const tabs = $('lib-tabs'); if (tabs) tabs.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === libTab));
-    searchEl.style.display = libTab === 'songs' ? '' : 'none';
-    const sortEl = $('lib-sort'); if (sortEl) { sortEl.style.display = libTab === 'songs' ? '' : 'none'; sortEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === (prefs.libsort || 'name'))); }
-    $('lib-actions').style.display = libTab === 'songs' ? '' : 'none';
-    if (libTab === 'queue') return renderQueue();
+    const tabs = $('lib-tabs');
+    if (tabs) tabs.querySelectorAll('button').forEach((x) => { const on = x.dataset.v === libTab; x.classList.toggle('on', on); if (on) tabs.scrollLeft = x.offsetLeft - (tabs.clientWidth - x.offsetWidth) / 2; });
+    const q = (searchEl.value || '').trim().toLowerCase(), grouped = libTab === 'albums' || libTab === 'artists', kind = libTab === 'albums' ? 'album' : 'artist';
+    if (grouped && openGroup && openGroup.kind !== kind) openGroup = null;
+    const tracksView = libTab === 'songs' || libTab === 'favs' || (grouped && openGroup);
+    $('lib-actions').style.display = tracksView ? '' : 'none';
+    $('lib-sortbtn').style.display = libTab === 'songs' ? '' : 'none';
+    $('lib-sortlabel').textContent = SORTS[prefs.libsort || 'name'];
+    if (libTab === 'queue') { $('lib-actions').style.display = 'none'; return renderQueue(); }
     if (libTab === 'lists') return renderPlaylists();
-    $('lib-count').textContent = lib.length ? `${lib.length} song${lib.length === 1 ? '' : 's'}` : 'Your library';
-    const q = (searchEl.value || '').trim().toLowerCase();
-    const rows = q ? lib.filter((t) => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q)) : lib;
     listEl.textContent = '';
-    if (!rows.length) return empty(lib.length ? 'No matches' : 'Tap "Find my music" to add the songs on your phone');
+    if (grouped && !openGroup) { // the list of albums / artists
+      $('lib-count').textContent = '';
+      const map = new Map();
+      for (const t of lib) { const k = groupKey(kind, t); const g = map.get(k) || { key: k, name: groupName(kind, t), n: 0, art: '', who: t.artist || '' }; g.n++; if (!g.art && t.art) g.art = t.art; map.set(k, g); }
+      const groups = [...map.values()].filter((g) => !q || g.name.toLowerCase().includes(q)).sort((x, y) => x.name.localeCompare(y.name));
+      if (!groups.length) return empty(lib.length ? 'No matches' : 'Tap ⋮ and choose "Find my music" to add the songs on your phone');
+      groups.forEach((g) => {
+        const row = document.createElement('div'); row.className = 'hrow' + (kind === 'artist' ? ' round' : '');
+        const th = document.createElement('div'); th.className = 'th'; if (g.art) th.style.backgroundImage = `url("${g.art}")`;
+        const tx = document.createElement('div'); tx.className = 'tx'; const b = document.createElement('b'); b.textContent = g.name;
+        const sp = document.createElement('span'); sp.textContent = [kind === 'album' ? g.who : '', `${g.n} song${g.n === 1 ? '' : 's'}`].filter(Boolean).join(' · '); tx.append(b, sp);
+        row.append(th, tx); row.onclick = (e) => { e.stopPropagation(); openGroup = { kind, key: g.key }; searchEl.value = ''; renderLibrary(); }; listEl.appendChild(row);
+      });
+      return;
+    }
+    let rows = libTab === 'favs' ? lib.filter(isFavT) : openGroup ? lib.filter((t) => groupKey(openGroup.kind, t) === openGroup.key) : lib;
+    if (q) rows = rows.filter((t) => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(q));
+    curRows = rows;
+    $('lib-count').textContent = rows.length ? `${rows.length} track${rows.length === 1 ? '' : 's'}` : '';
+    if (openGroup) { // a back bar with the album / artist name
+      const bar = document.createElement('div'); bar.className = 'lib-detail';
+      const back = iconBtn('Back', 'M15 5l-7 7 7 7', () => { openGroup = null; renderLibrary(); }, 'lib-ico');
+      const h = document.createElement('b'); const first = lib.find((t) => groupKey(openGroup.kind, t) === openGroup.key); h.textContent = first ? groupName(openGroup.kind, first) : '';
+      bar.append(back, h); listEl.appendChild(bar);
+    }
+    if (!rows.length) return empty(libTab === 'favs' ? 'No favourites yet. Tap ⋮ on a song and choose "Add to favourites".' : lib.length ? 'No matches' : 'Tap ⋮ and choose "Find my music" to add the songs on your phone');
     // big libraries: draw 60 rows now and more as the list is scrolled (thousands of rows at once would make the phone crawl)
     pageRows = rows; pageShown = 0; listEl.scrollTop = 0; appendRows();
   }
@@ -841,15 +897,17 @@
     const end = Math.min(pageRows.length, pageShown + PAGE), frag = document.createDocumentFragment();
     for (let i = pageShown; i < end; i++) {
       const t = pageRows[i];
-      const row = songRow(t, [
-        iconBtn('Play next', ICON_NEXT, () => playNext(t.id)),
-        iconBtn('Add to a playlist', ICON_PLUS, () => pickPlaylist(t.id)),
-        iconBtn('Remove from library', ICON_X, () => { if (confirm(`Remove "${t.title}" from your library?`)) removeTrack(t.id); }),
-      ]);
-      row.onclick = () => { source = { type: 'library', id: null }; playId(t.id); closeLib(); };
+      const row = songRow(t, [iconBtn('More', ICON_DOTS, () => rowMenu(t), 'star dots')]);
+      row.onclick = () => { source = { type: 'library', id: null }; playId(t.id); };
       frag.appendChild(row);
     }
     listEl.appendChild(frag); pageShown = end;
+  }
+  function playView(shuf) { // the round play / shuffle buttons: whatever list is on screen (all tracks, the favourites, one album or artist)
+    if (!curRows.length) return;
+    const whole = libTab === 'songs' && !openGroup && curRows.length === lib.length;
+    source = whole ? { type: 'library', id: null } : { type: 'ids', ids: curRows.map((t) => t.id) };
+    shuffle = !!shuf; buildOrder(); playId(order[0], true);
   }
   listEl.addEventListener('scroll', () => { if (libTab === 'songs' && pageShown < pageRows.length && listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - 400) appendRows(); }, { passive: true });
 
@@ -893,7 +951,7 @@
         iconBtn('Move to the top', ICON_UP, () => { order.splice(pos, 1); order.splice(idx + 1, 0, id); orderEdited(); renderQueue(); }),
         iconBtn('Remove from the queue', ICON_X, () => { order.splice(pos, 1); orderEdited(); renderQueue(); }),
       ]);
-      row.onclick = () => { idx = pos - 1; next(); closeLib(); };
+      row.onclick = () => { idx = pos - 1; next(); };
       dragReorder(handle, row, pos);
       listEl.appendChild(row);
     });
@@ -907,7 +965,7 @@
   }
   function playPlaylist(id, shuf) {
     const p = playlists.find((x) => x.id === id); if (!p || !sourceIdsFor(id).length) { toast('That playlist is empty'); return; }
-    source = { type: 'playlist', id }; shuffle = !!shuf; buildOrder(); playId(order[0], true); closeLib();
+    source = { type: 'playlist', id }; shuffle = !!shuf; buildOrder(); playId(order[0], true);
   }
   const sourceIdsFor = (id) => (playlists.find((p) => p.id === id) || { ids: [] }).ids.filter((x) => lib.some((t) => t.id === x));
   function renderPlaylists() {
@@ -932,7 +990,7 @@
       ids.forEach((id) => {
         const t = lib.find((x) => x.id === id);
         const row = songRow(t, [iconBtn('Remove from playlist', ICON_X, () => { pl.ids = pl.ids.filter((x) => x !== id); savePlaylists(); renderLibrary(); })]);
-        row.onclick = () => { source = { type: 'playlist', id: pl.id }; buildOrder(id); loadTrack(id, true); closeLib(); };
+        row.onclick = () => { source = { type: 'playlist', id: pl.id }; buildOrder(id); loadTrack(id, true); };
         listEl.appendChild(row);
       });
       return;
@@ -962,20 +1020,24 @@
     m.append(nw, cancel); document.getElementById('card').appendChild(m);
   }
 
-  const sortBox = $('lib-sort');
-  if (sortBox) sortBox.querySelectorAll('button').forEach((b) => { b.onclick = () => { prefs.libsort = b.dataset.v; savePrefs(); sortLib(); buildOrder(cur && cur.id); renderLibrary(); }; });
+  $('lib-sortbtn').onclick = (e) => { e.stopPropagation(); popMenu('Sort by', Object.entries(SORTS).map(([v, label]) => [`${(prefs.libsort || 'name') === v ? '\u2713 ' : ''}${label}`, () => { prefs.libsort = v; savePrefs(); sortLib(); buildOrder(cur && cur.id); renderLibrary(); }])); };
+  $('lib-search-btn').onclick = (e) => { e.stopPropagation(); const on = !searchEl.classList.contains('show'); searchEl.classList.toggle('show', on); if (on) { if (libTab !== 'songs' && libTab !== 'favs') { libTab = 'songs'; openGroup = null; openList = null; renderLibrary(); } searchEl.focus(); } else { searchEl.value = ''; renderLibrary(); } };
+  $('lib-menu-btn').onclick = (e) => { e.stopPropagation(); popMenu('', [
+    ['Find my music', () => $('lib-add').click()], ['Add files', () => $('lib-pick').click()], ['Queue', () => { libTab = 'queue'; renderLibrary(); }],
+    ['History & favourites', () => $('btn-history').click()], ['Settings', () => $('btn-settings').click()], ['Now playing', () => document.querySelectorAll('.pop.open').forEach((x) => x.classList.remove('open'))],
+  ]); };
   const tabsEl = $('lib-tabs');
-  if (tabsEl) tabsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { libTab = b.dataset.v; openList = null; renderLibrary(); }; });
+  if (tabsEl) tabsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { libTab = b.dataset.v; openList = null; openGroup = null; renderLibrary(); }; });
   $('btn-library').onclick = (e) => { e.stopPropagation(); togglePop('library'); renderLibrary(); };
   $('btn-add-cta').onclick = () => (scanner ? scanPhone(true) : fileIn.click());
   $('lib-add').onclick = () => (scanner ? scanPhone(true) : fileIn.click());
   $('lib-pick').onclick = () => fileIn.click(); // still possible to add single files, e.g. from a folder the scan does not cover
   fileIn.onchange = () => { const picked = [...fileIn.files]; fileIn.value = ''; if (picked.length) addFiles(picked); }; // copy first: the FileList is live and clearing the input empties it
   let searchTimer = 0; searchEl.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLibrary, 160); }; // wait for a pause in typing
-  $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
-  $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
+  $('lib-play-all').onclick = () => playView(false);
+  $('lib-shuffle-all').onclick = () => playView(true);
   carSync();
-  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); else if (p && p.car) carStart(); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
+  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); if (lib.length && !document.querySelector('.pop.open')) openLibrary(); emit(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); else if (p && p.car) carStart(); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */
@@ -1003,17 +1065,20 @@
   if (mp) {
     const q = (s) => mp.querySelector(s), mpPlay = q('.mp-play'), mpBar = q('.mp-bar i');
     const syncMini = () => {
-      if (!cur) return;
-      q('.mp-title').textContent = cur.title; q('.mp-artist').textContent = cur.artist || 'Unknown artist';
-      q('.mp-art').style.backgroundImage = cur.art ? `url("${cur.art}")` : '';
-      mpPlay.innerHTML = `<svg viewBox="0 0 24 24"><path d="${audio.paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zM13 5h4v14h-4z'}"/></svg>`;
-      mpPlay.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+      const l = LS.get('vibe.last', null), shown = cur || (l && lib.find((x) => x.id === l.id)) || lib[0]; // before anything is loaded: what played last, else the first song
+      if (!shown) return;
+      const paused = !cur || audio.paused;
+      q('.mp-title').textContent = shown.title; q('.mp-artist').textContent = shown.artist || 'Unknown artist';
+      q('.mp-art').style.backgroundImage = shown.art ? `url("${shown.art}")` : '';
+      mpPlay.innerHTML = `<svg viewBox="0 0 24 24"><path d="${paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zM13 5h4v14h-4z'}"/></svg>`;
+      mpPlay.setAttribute('aria-label', paused ? 'Play' : 'Pause');
     };
     const syncBar = () => { const d = audio.duration; mpBar.style.width = Number.isFinite(d) && d > 0 ? `${Math.min(100, (audio.currentTime / d) * 100).toFixed(1)}%` : '0%'; };
     const baseEmit = emit; // refresh whenever the song or play state changes
     emit = function () { baseEmit(); syncMini(); syncBar(); };
     setInterval(() => { if (!audio.paused) syncBar(); }, 500);
     q('.mp-info').onclick = () => document.querySelectorAll('.pop.open').forEach((p) => p.classList.remove('open')); // back to the full player
+    q('.mp-queue').onclick = (e) => { e.stopPropagation(); libTab = 'queue'; openLibrary(); };
     q('.mp-prev').onclick = (e) => { e.stopPropagation(); prev(); };
     q('.mp-next').onclick = (e) => { e.stopPropagation(); next(); };
     mpPlay.onclick = (e) => { e.stopPropagation(); if (!cur) startPlayback(); else if (audio.paused) audio.play(); else audio.pause(); };
@@ -1029,9 +1094,10 @@
   if (app && app.addListener) app.addListener('appStateChange', (st) => { if (st && st.isActive) scanPhone(false); }); // pick up songs added while the app was in the background
   if (app && app.addListener) app.addListener('backButton', () => { // close panels / leave ambient first, otherwise send the app to the background (music keeps playing)
     const open = document.querySelector('.pop.open');
-    if (open) { open.classList.remove('open'); return; }
+    if (open && open.id === 'pop-library') { app.minimizeApp?.(); return; } // the library is home
+    if (open) { open.classList.remove('open'); if (lib.length) openLibrary(); return; }
     if (document.body.classList.contains('fullscreen') && typeof setMode === 'function') { setMode('none'); return; }
-    app.minimizeApp?.();
+    if (lib.length) openLibrary(); else app.minimizeApp?.(); // from the player, Back goes to the library
   });
   // size the record to the screen width
   const fit = () => { // size the record to the screen; in landscape it is the height that limits it

@@ -127,3 +127,59 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
 
 .mobile .volpop { right: -4px; width: min(280px, 80vw); }
 .mobile .volpop .wbtn { width: 38px; height: 38px; }
+
+/* ---------- Samsung Music style library: the home screen of the phone app ---------- */
+.mobile .card > #pop-library { left: 0; right: 0; top: 0; bottom: 0; width: auto; max-height: none; padding: calc(10px + var(--sat)) 0 0; border-radius: 0; z-index: 7; display: flex; flex-direction: column; overflow: hidden;
+  background: #000 !important; outline: 0; box-shadow: none; --peach: #f3d6c3; --dim: #bfb1a8; }
+#pop-library .lib-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px 6px 26px; }
+#pop-library .lib-title { font-size: 30px; font-weight: 600; color: var(--peach); letter-spacing: -.01em; }
+#pop-library .lib-top-btns { display: flex; gap: 6px; }
+.lib-ico { flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: var(--peach, #fff); }
+.lib-ico svg, .lib-sortbtn svg, .lib-circ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lib-ico.dots svg, .hrow .star.dots svg { stroke-width: 3.4; }
+.lib-circ svg.pfill { fill: currentColor; stroke-width: 1.2; }
+.lib-ico:active, .lib-circ:active { background: rgba(255,255,255,.12); }
+#pop-library #lib-search { display: none; margin: 4px 22px 6px; width: auto; background: #1b1b1b; }
+#pop-library #lib-search.show { display: block; }
+.lib-tabs { display: flex; align-items: baseline; gap: 22px; overflow-x: auto; white-space: nowrap; padding: 18px 26px 14px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.lib-tabs::-webkit-scrollbar { display: none; }
+.lib-tabs button { flex: none; font-size: 19px; color: var(--dim); font-weight: 400; transition: font-size .15s, color .15s; }
+.lib-tabs button.on { font-size: 34px; color: var(--peach); font-weight: 500; }
+.lib-sheet { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: #151515; border-radius: 34px 34px 0 0; }
+.lib-actions { flex: none; display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px 26px; }
+.lib-sortbtn { display: flex; align-items: center; gap: 12px; color: #d8cfc9; font-size: 16px; padding: 6px 4px; }
+.lib-count { flex: 1; font-size: 12px; color: var(--dim); text-align: left; padding-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-circ { flex: none; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: #2a2a2a; color: #fff; }
+#pop-library #lib-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; margin: 0; gap: 0; padding: 0 12px calc(96px + var(--sab)) 18px; }
+#pop-library .hrow { gap: 16px; padding: 10px 4px 10px 0; border-radius: 0; background: none; contain-intrinsic-size: 0 84px; position: relative; }
+#pop-library .hrow .th { width: 62px; height: 62px; border-radius: 16px; }
+#pop-library .hrow.round .th { border-radius: 50%; }
+#pop-library .hrow .tx { padding: 4px 0; }
+#pop-library .hrow b { font-size: 18px; font-weight: 400; color: #f1ece8; }
+#pop-library .hrow span { font-size: 15px; color: var(--dim); margin-top: 2px; }
+#pop-library .hrow.now b { color: var(--peach); font-weight: 600; }
+#pop-library .hrow .star { width: 44px; height: 44px; color: #d8cfc9; border-radius: 50%; }
+#pop-library .hrow .star svg { width: 22px; height: 22px; }
+#pop-library .hrow:not(:last-child)::after { content: ""; position: absolute; left: 78px; right: 8px; bottom: 0; height: 1px; background: rgba(255,255,255,.1); }
+#pop-library .hrow:active { background: rgba(255,255,255,.05); }
+.lib-detail { display: flex; align-items: center; gap: 4px; padding: 4px 0 8px; }
+.lib-detail b { font-size: 20px; font-weight: 500; color: var(--peach); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-detail .lib-ico { width: 42px; height: 42px; }
+#pop-library .hist .empty { padding: 40px 18px; font-size: 14px; }
+
+/* the mini player becomes the brown pill at the bottom */
+.card:has(#pop-library.open) #mini-player { display: flex; }
+#mini-player { height: 72px; left: 8px; right: 8px; border-radius: 36px; padding: 0 10px 0 10px; background: #54300d !important; outline: 0; box-shadow: 0 6px 22px rgba(0,0,0,.55); }
+#mini-player .mp-art { width: 54px; height: 54px; border-radius: 50%; }
+#mini-player .mp-tx b { font-size: 17px; font-weight: 600; color: #fff; }
+#mini-player .mp-tx span { font-size: 15px; color: #e6cdb8; }
+#mini-player .mp-btn { width: 46px; height: 46px; }
+#mini-player .mp-btn svg { width: 25px; height: 25px; }
+#mini-player .mp-queue svg { fill: none; stroke-width: 1.8; }
+#mini-player .mp-bar { left: 28px; right: 28px; bottom: 2px; height: 2px; background: rgba(255,255,255,.14); }
+#mini-player .mp-bar i { background: #f3d6c3; }
+@media (orientation: landscape) {
+  .mobile .card > #pop-library { width: auto; left: 0; right: 0; max-height: none; top: 0; }
+  #mini-player { left: 8px; right: 8px; width: auto; }
+  .card:has(#pop-library.open) #mini-player { display: flex; }
+}
