@@ -107,19 +107,28 @@
     aliens: (g, x, y, a, c) => { g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = c.head; g.beginPath(); g.ellipse(0, .2, 3, 2.5, 0, 0, TAU); g.fill(); g.strokeStyle = c.head; g.lineWidth = .7;
       g.beginPath(); g.moveTo(-1.6, -2); g.lineTo(-2.7, -3.9); g.moveTo(1.6, -2); g.lineTo(2.7, -3.9); g.stroke(); g.fillStyle = c.body; g.beginPath(); g.arc(-2.7, -4, .8, 0, TAU); g.arc(2.7, -4, .8, 0, TAU); g.fill(); g.restore(); },
   };
-  /* ---- the Pro penguin: one little sprite, thrown around by the same pose numbers (hop, lean, spin, flip, knee-dip squash) ---- */
-  const PENG = new Image(); PENG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAXCAYAAAARIY8tAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAFJ0lEQVR42o2WXWwcZxWGn/PN7Hr9F/+kdrxpHZcktCFV1SZ1VISquCluUi5oLqhXCKgKimkqqgohFSkSCNc3gLhBIIEgdnpJJQMlvShIkJJAK1SIf2KSkNjkT8QldhK79tqOd3dmvpeLdUxD7Yr3Yi5m5jzvd7453zljfKQEAsxI9Y2SpNNCQFIwf2AHSGCwfFlV7iPhA2V4cGRUcU2dvBcew2fqZEdOSwA9lI3WULjmk54TkNtD0Dciv64J5Wcw+bJ1XEL1Tbj+U6J3h8HxNTGr59YzAL05XP+g/LoWWJgF7//7+u2o2kZcfgrfvdMYGIBc7v8w+PkgHGwn1TdEnK6WvIc4whxkQocXFJMEvEEQYmFIUFqwuPuRldi1DQYEOSPoG8anqiQzLCoQhilee3wTWytFFMOFovHs2xPEURFSFRgeV7xlyfPtK4wPf4Oe45AzwsMjSjI1yCdYaQm5FCkK1I4eQUmB0GADUJM8xqw1YlEBpTIklXVyr47ic3bHdtkKvHcPrv+UVNuIFvIgT2CexNXz0twP+e7Mj8inMgjRGBV5peEFflB/iMDPkuDKqJp6bGEGHXho2aSL8HZK6cMniarWocX5D9X2lvgq5hyRDzGDxEWsj6fv3GkzWJxDteuxvlNS7mFjYABHF3B4lCiskrywJMItLYC5leATS5tx5jFXBoXmGV7a+AG+wy0tYHEEhSVUW0/QPwK5HA4zLEBqaMZNv0cw/MfyITNDMrAii7U7GCvdTcYvUKl5zhWaaN74KC6I8CpnKudww2/hpicgSOOXj59V/+IiS/OzssnL2MgJtP1Rku2fxAq3kKCqupKfZW/yz9//ihYuEwbiUnETTz/zJQ5O3cXZf+ex0OEzVbiLowR/eQO17yPZ8iApw9zS/Cw0t5LGzOWnTW3bsTjBOYdFns6WSj77iVZKroKrmXYup3aRpKp5YFMzL2xrQJHHOYM4hg1tMDNlaTCrbyGOSjg3c0127l2Wej5HnKrEJsYhDMF75ODF+2upb87S0NCAleZwpTx31a+jen0L3Vvq2HlPNXExJkinsSunSSoq2BWO407/GTd7U06Dx3Bv/8YAnC/B+UGCW7MkPuTJthr2ZmuRBezr7EQ4PMbeJ/cSpiqocOJoZystjdXoxgQ2PkLQcDd/6u2FwT/AX38H4d5ny62wawAkUk99RUH395R9dUhjs4vy8kp8LEmaun5NU9cnVVaiKIkkST8evCDrOqSqrm8IM+jogUeeJ73/a3Jx8V/LBf9LMCObbbHk0iU+Xxrjvroq4jjCmSElNDe10Ny0ASkpV44vd9eG6Qk0/z73t+8yJHgcGDrM/qM/ubMVdXR0APCp3ffp6ee6NHbhsiTJJ5GSJFIclxTHJSVJJO/Lq39v8oYOvvgFPdaevYOxps4MdPHmV0MdegK9/OUn9LehIXmtrpEz5/Stl57Ry3vQ0QNp6bdPobXatXrAeuHst2vJ1niNTCS8PlzAGlvZtvuLbHmog5bsRgLnuDZ5nYtn32X8nde4NXGGT2+rYN+2kLliydq+E62wVp1oKRnFWOxqM4wMx85fZfTX32f82E9R8058WEN48ySLN6eoTcNnHsiwZ6sjX/BcyZfbyytrzYPbzq93Z/Rg1tFUbeSLYvyG59xkkfNjsjiAj7WirU0VPHxPyMY6mF3ynLwi9vcX7IOrX3Wiafnm1ztDPt7odG9DQOzF8YvinbnnbPfmv6P3h9W52dFQ5ZgteP5xDfvmG4XyT8b/EP8DL1GYOUostUAAAAAASUVORK5CYII=';
-  const PW = 24, PH = 23; // sprite size in art pixels
-  function penguin(g, P) {
+  /* ---- the Pro penguin: a small sprite that waddles (rocks side to side with little hops) when he walks, and on the spot
+     bounces and sways on the beat, with a quick spin every 8 beats. He ignores the skeleton moves; the beat clock drives him ---- */
+  const PENG = new Image(); PENG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAPCAYAAADtc08vAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAACxklEQVR42mWSS2hcBRSGv3Pv3MnMZDLDtLb4wsY0IbYEjTRBSRehkOKjEGpLU1C6KWi0C3GhWEU6tQguRAQ37QShCFLIBAQfi7gwoYVW00y1SjVg8IFOa6BtTMb0Tif38bsYCRj/1Tn854Pzww/rVZwGwC1VsA/nZKfn5I5Vml5Z/zu3/2zTgl2GW6qgTE5IGBCbg1Nfsui5fihVYLRvDXHWplIFdhne2AxxOqs4DIh9n6juo6BBlMqLsZkmXKqs+6AsGDG8UoUo1aY4ho58C691txHG4p35FX5ZbuC6wrm1ZMELj64xCcplGDHck7OE6ZwcEwQwtPgxT12cwhBz4U7et/3gQtBakHPqksUjBuVmRBKnZghzd4gwwmncQok8438eZLc/C8Bkuo+n7xrHiWpEyTQkU1C7aYzuwKF4mjDVJqv7OAu/YZ6HYjET9+J54How7z6IMOR5ONf/wJauQyojTl7AcToGcBcXcM5/ArkNxJHIZ8TdHY9xpj7MR/4eOrv2sLVgaDXG8ptwv/68yWQLcvhrQda4bYSruBs2o3rI3vYs+3o7+SbYxuWgh0e67+f1hzai1QjLFZBfw5Zvwo0FEs5XnxKOv0ty6Bni+cuk73uAV7vbaM8V2LF9K46Jezq3cbilhaneTZyZPE/670Xzpz/Du3OzSA4Mg0T/3kOw+3m9dfZHSVIjaEiKJMUKwlVJ0oWfr4rHj2jglQ8ASA6PNsswODiIAU/2beSNo89q5Xao9aqH0tsnXtQTffk15t/uFykfABBX30xrbD96+fCQpr78Qr9Xq6peu6Zz56Z19Mg+vTeMfj2WEqjJFIvNHugA2ATMH8toS8Fh4uIKPy1DrbUHOS201r5nSybg0ECW6nJM1wnfVAYbgQTA8e0g4KWzkQ12Reppz5K9ETA5e8WCCHb2e3r43hzfVgMmvsMEHP+hGeAfpn1XYEV+HQUAAAAASUVORK5CYII=';
+  const PW = 16, PH = 15; // sprite size in art pixels
+  function penguin(g, P, x) {
     if (!PENG.complete || !PENG.naturalWidth) return;
-    const reach = Math.max(C(P.lt) * LEN.th + C(P.ls) * LEN.sh, C(P.rt) * LEN.th + C(P.rs) * LEN.sh), sq = clamp(reach / 6.6, .78, 1.08); // knees bend -> he squashes down
-    const air = clamp(P.jump / 12), bx = GX + P.hx, fy = GY - P.jump;
-    g.fillStyle = 'rgba(0,0,0,' + (.32 * (1 - air * .6)) + ')'; g.beginPath(); g.ellipse(bx, GY + .8, 7 * (1 - air * .35) * Math.max(.45, Math.abs(P.turn)), 1.5, 0, 0, TAU); g.fill();
-    g.save(); g.translate(bx, fy); g.rotate(P.rot + (P.lean + P.tilt) * .7); g.scale(P.turn * (1 + (1 - sq) * .6), sq);
+    const rm = reduced() ? .5 : 1, amp = (.5 + x.e) * rm; let hop = 0, rot = 0, hx = 0, sq = 1, turn = 1;
+    if (x.walk) { // the waddle: one rock per 9 art pixels walked, a hop on each step
+      const c = x.w * TAU; rot = S(c) * .2 * rm; hx = S(c) * .7 * rm; hop = Math.abs(S(c)) * 1.3 * rm; sq = 1 - (1 - Math.abs(S(c))) * .05;
+    } else { // the dance: bounce on every beat, sway left then right, spin once every 8 beats
+      const b = x.ph - Math.floor(x.ph), bar = (x.ph / 8) - Math.floor(x.ph / 8);
+      hop = Math.abs(S(b * PI)) * (1.5 + 3 * amp); rot = S(x.ph * PI) * .22 * amp; hx = S(x.ph * PI) * 1.2 * amp; sq = 1 - hit(b) * .1 * amp;
+      if (bar > .875) turn = C(((bar - .875) / .125) * TAU) ; // the spin: he turns edge-on and back
+      if (Math.abs(turn) < .12) turn = turn < 0 ? -.12 : .12;
+    }
+    const air = clamp(hop / 8), bx = GX + hx, fy = GY - hop;
+    g.fillStyle = 'rgba(0,0,0,' + (.32 * (1 - air * .6)) + ')'; g.beginPath(); g.ellipse(GX + hx, GY + .8, 5 * (1 - air * .35) * Math.max(.45, Math.abs(turn)), 1.2, 0, 0, TAU); g.fill();
+    g.save(); g.translate(bx, fy); g.rotate(rot); g.scale(turn * (1 + (1 - sq) * .6), sq);
     g.drawImage(PENG, -PW / 2, -PH, PW, PH); g.restore();
   }
-  function figure(g, P, c, pack) {
-    if (pack === 'penguin') return penguin(g, P);
+  function figure(g, P, c, pack, x) {
+    if (pack === 'penguin') return penguin(g, P, x);
     const th = LEN.th, sh = LEN.sh, to = LEN.to, ua = LEN.ua, fa = LEN.fa;
     // local joints (x right, y down, pelvis at 0,0)
     const kL = [-.9 - S(P.lt) * th, C(P.lt) * th], fL = [kL[0] - S(P.ls) * sh, kL[1] + C(P.ls) * sh];
@@ -267,7 +276,7 @@
     const P = pose(dt), sc = scale(), g = state.geo, cv = guy.back ? cvBack : cvFront, other = guy.back ? cvFront : cvBack;
     other.style.display = 'none'; cv.style.display = '';
     const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, W, H);
-    figure(ctx, P, { body: state.colors[guy.hue], det: state.colors[(guy.hue + 1) % 2], head: state.colors[2], eye: 'rgba(20,20,30,.85)' }, pack());
+    figure(ctx, P, { body: state.colors[guy.hue], det: state.colors[(guy.hue + 1) % 2], head: state.colors[2], eye: 'rgba(20,20,30,.85)' }, pack(), { walk: guy.st !== 'dance', w: guy.w, ph: state.ph, e: state.e });
     place(cv, guy.back ? g.stage : g.card, sc);
   }
   const kick = () => { if (!state.raf && prefOn() && playing()) { state.lastT = performance.now(); state.raf = requestAnimationFrame(frame); } };
