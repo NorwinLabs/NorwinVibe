@@ -41,6 +41,16 @@
             </intent-filter>
         </service>
 
+        <!-- "start my music when I get in the car": a Bluetooth device connected -->
+        <receiver
+            android:name=".CarReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+
         <!-- notification / lock screen / widget buttons -->
         <receiver
             android:name=".MediaActionReceiver"
@@ -84,4 +94,8 @@
     <!-- finds the music on the phone -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- car start: see which Bluetooth devices are paired / connecting, and (optionally) let the app open itself when the car connects -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 </manifest>

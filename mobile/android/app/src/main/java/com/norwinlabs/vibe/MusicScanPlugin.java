@@ -85,7 +85,7 @@ public class MusicScanPlugin extends Plugin {
         Uri src = Build.VERSION.SDK_INT >= 29 ? MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL) : MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         String[] cols = {
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE
+            MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_ADDED
         };
         JSArray out = new JSArray();
         try (Cursor c = cr.query(src, cols, MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " + MediaStore.Audio.Media.DURATION + " >= ?", new String[] { String.valueOf(MIN_MS) }, MediaStore.Audio.Media.TITLE + " COLLATE NOCASE")) {
@@ -94,7 +94,7 @@ public class MusicScanPlugin extends Plugin {
                 if (path == null || path.isEmpty()) continue;
                 JSObject t = new JSObject();
                 t.put("mid", c.getLong(0)); t.put("path", path); t.put("name", c.getString(2)); t.put("title", c.getString(3));
-                t.put("artist", c.getString(4)); t.put("album", c.getString(5)); t.put("dur", c.getLong(6) / 1000.0); t.put("size", c.getLong(7));
+                t.put("artist", c.getString(4)); t.put("album", c.getString(5)); t.put("dur", c.getLong(6) / 1000.0); t.put("size", c.getLong(7)); t.put("added", c.getLong(8) * 1000L);
                 out.put(t);
             }
         } catch (Exception e) {

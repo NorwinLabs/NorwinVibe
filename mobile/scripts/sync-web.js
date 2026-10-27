@@ -45,6 +45,7 @@ sub('  <!-- theme store -->', `  <!-- music library (phone only) -->
     <div class="lib-head"><b id="lib-count">Library</b><span class="lib-btns"><button class="act" id="lib-add">Find my music</button><button class="act" id="lib-pick" title="Add individual files">Add files</button></span></div>
     <input id="lib-search" type="search" placeholder="Search songs" spellcheck="false" autocomplete="off">
     <div class="chips tabs" id="lib-tabs"><button data-v="songs" class="on">Songs</button><button data-v="lists">Playlists</button><button data-v="queue">Queue</button></div>
+    <div class="chips tabs" id="lib-sort" title="Order the songs"><button data-v="name" class="on">A\u2013Z</button><button data-v="added">Last added</button></div>
     <div class="act-row" id="lib-actions"><button class="act" id="lib-play-all">Play all</button><button class="act" id="lib-shuffle-all">Shuffle</button></div>
     <div id="lib-list" class="hist"></div>
     <input type="file" id="lib-file" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac" multiple hidden>

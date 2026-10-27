@@ -21,7 +21,10 @@ import com.getcapacitor.annotation.PermissionCallback;
  */
 @CapacitorPlugin(
     name = "MediaService",
-    permissions = { @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }) }
+    permissions = {
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }),
+        @Permission(alias = "bluetooth", strings = { "android.permission.BLUETOOTH_CONNECT" })
+    }
 )
 public class MediaServicePlugin extends Plugin {
     private static MediaServicePlugin instance;
@@ -33,6 +36,7 @@ public class MediaServicePlugin extends Plugin {
     protected void handleOnDestroy() { if (instance == this) instance = null; }
 
     private static String pendingId, pendingList, pendingQuery;
+    private static boolean pendingCar; private static long pendingCarAt;
 
     /** A song (or a voice search) chosen in Android Auto. If the web UI is not running, remember it and open the app. */
     static void dispatchPlay(String id, String list, String query) {
@@ -53,6 +57,30 @@ public class MediaServicePlugin extends Plugin {
         }
     }
 
+    /** The phone connected to the car. Tell the web UI to start the music, or wake the app (or nudge the user) if it is not running. */
+    static void dispatchCar(android.content.Context c) {
+        MediaServicePlugin p = instance;
+        if (p != null) {
+            JSObject o = new JSObject(); o.put("action", "carStart");
+            p.notifyListeners("action", o, true);
+            return;
+        }
+        pendingCar = true; pendingCarAt = System.currentTimeMillis();
+        // Android only lets an app that is not on screen open itself if the user allowed "Display over other apps"; without it, ask with a notification
+        android.content.Intent open = new android.content.Intent(c, MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (android.provider.Settings.canDrawOverlays(c)) {
+            try { c.startActivity(open); return; } catch (Exception ignored) { }
+        }
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) c.getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new android.app.NotificationChannel("car", "Car", android.app.NotificationManager.IMPORTANCE_HIGH));
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(c, 7, open, android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            android.app.Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new android.app.Notification.Builder(c, "car") : new android.app.Notification.Builder(c);
+            b.setContentTitle("Connected to your car").setContentText("Tap to start your music").setSmallIcon(c.getApplicationInfo().icon).setContentIntent(pi).setAutoCancel(true);
+            nm.notify(7, b.build());
+        } catch (Exception ignored) { }
+    }
+
     /** The web UI asks, once it has started, whether the car picked something while it was not running. */
     @PluginMethod
     public void takePending(PluginCall call) {
@@ -60,7 +88,8 @@ public class MediaServicePlugin extends Plugin {
         if (pendingId != null) o.put("id", pendingId);
         if (pendingList != null) o.put("list", pendingList);
         if (pendingQuery != null) o.put("query", pendingQuery);
-        pendingId = null; pendingList = null; pendingQuery = null;
+        if (pendingCar && System.currentTimeMillis() - pendingCarAt < 10 * 60 * 1000) o.put("car", true); // only if the car connected a moment ago
+        pendingCar = false; pendingId = null; pendingList = null; pendingQuery = null;
         call.resolve(o);
     }
 
@@ -68,6 +97,57 @@ public class MediaServicePlugin extends Plugin {
     @PluginMethod
     public void setLibrary(PluginCall call) {
         AutoBrowserService.setSnapshot(getContext(), call.getData().toString());
+        call.resolve();
+    }
+
+    /* ---- "start my music when I get in the car" settings (mirrored to SharedPreferences for CarReceiver) ---- */
+
+    private android.content.SharedPreferences carPrefs() { return getContext().getSharedPreferences(CarReceiver.PREFS, android.content.Context.MODE_PRIVATE); }
+
+    @PluginMethod
+    public void carSet(PluginCall call) {
+        java.util.HashSet<String> addrs = new java.util.HashSet<>();
+        try { com.getcapacitor.JSArray a = call.getArray("addrs"); for (int i = 0; a != null && i < a.length(); i++) addrs.add(a.getString(i)); } catch (Exception ignored) { }
+        carPrefs().edit().putBoolean("on", Boolean.TRUE.equals(call.getBoolean("on", false))).putStringSet("addrs", addrs).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void carStatus(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("overlay", android.provider.Settings.canDrawOverlays(getContext()));
+        o.put("bluetooth", Build.VERSION.SDK_INT < 31 || getPermissionState("bluetooth") == PermissionState.GRANTED);
+        call.resolve(o);
+    }
+
+    /** Paired Bluetooth devices, so the user can say which one is the car (asks for Bluetooth access the first time). */
+    @PluginMethod
+    public void carDevices(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 31 && getPermissionState("bluetooth") != PermissionState.GRANTED) { requestPermissionForAlias("bluetooth", call, "afterBluetooth"); return; }
+        listDevices(call);
+    }
+
+    @PermissionCallback
+    private void afterBluetooth(PluginCall call) { listDevices(call); }
+
+    private void listDevices(PluginCall call) {
+        JSObject o = new JSObject(); com.getcapacitor.JSArray out = new com.getcapacitor.JSArray();
+        try {
+            android.bluetooth.BluetoothAdapter ad = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+            if (ad != null) for (android.bluetooth.BluetoothDevice d : ad.getBondedDevices()) {
+                JSObject x = new JSObject(); x.put("name", d.getName() == null ? d.getAddress() : d.getName()); x.put("addr", d.getAddress()); x.put("car", CarReceiver.looksLikeCar(d)); out.put(x);
+            }
+        } catch (SecurityException e) { o.put("denied", true); }
+        o.put("devices", out); call.resolve(o);
+    }
+
+    /** Opens the system page where the user allows "Display over other apps", which is what lets the app open itself when the car connects. */
+    @PluginMethod
+    public void carOverlaySettings(PluginCall call) {
+        try {
+            android.content.Intent i = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + getContext().getPackageName()));
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK); getContext().startActivity(i);
+        } catch (Exception ignored) { }
         call.resolve();
     }
 

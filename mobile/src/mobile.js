@@ -15,7 +15,7 @@
   const toast = (t) => { if (typeof hud === 'function') hud(t); };
 
   /* ================= preferences & store (mirrors main.js) ================= */
-  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', stats: true, replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
+  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', stats: true, replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', carstart: false, libsort: 'name', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
   const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
   const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'smartshuffle']); // only settable with a Pro license (desktop-only Pro switches are not offered here)
   const ENUMS = {
@@ -25,6 +25,7 @@
     theme: ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'],
     record: ['vinyl', 'color', 'cd', 'cyber', 'nightcity'],
     dancerpack: ['people', 'robots', 'aliens', 'penguin'],
+    libsort: ['name', 'added'],
     deckskin: ['dark', 'wood', 'neon'],
     needle: ['classic', 'gold', 'minimal', 'cyber', 'nightcity'],
     viz: ['bars', 'dots', 'wave', 'off', 'cyber', 'nightcity'],
@@ -96,8 +97,9 @@
     t.oncomplete = () => res(); t.onerror = () => rej(t.error);
   }));
 
-  let lib = []; // track metadata, sorted by artist then title
-  const sortLib = () => lib.sort((a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title));
+  let lib = []; // track metadata, sorted by artist then title (or newest first)
+  const byName = (a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title);
+  const sortLib = () => lib.sort(prefs.libsort === 'added' ? (a, b) => (b.added || 0) - (a.added || 0) || byName(a, b) : byName); // Library > Songs: A-Z, or newest first
   const libReady = dbDo('meta', 'readonly', (s) => s.getAll()).then((all) => { lib = all || []; sortLib(); }).catch(() => {});
 
   const readTags = (file) => new Promise((res) => {
@@ -192,9 +194,12 @@
       const res = await scanner.scan({ prompt: !!prompt });
       if (!res.granted) { if (prompt) toast(res.denied ? 'Allow music access to find your songs' : 'Music access needed'); return; }
       const found = res.tracks || [], paths = new Set(found.map((x) => x.path)), have = new Map(lib.filter((t) => t.path).map((t) => [t.path, t]));
+      const redated = []; // songs already here get the date the phone's media index says they were added (once), so "last added" is real
+      for (const x of found) { const t = have.get(x.path); if (t && x.added && !t.addedReal) { t.added = x.added; t.addedReal = true; redated.push(t); } }
+      if (redated.length) { await dbMulti(['meta'], (m) => redated.forEach((r) => m.put(r))); sortLib(); buildOrder(cur && cur.id); renderLibrary(); }
       const fresh = found.filter((x) => !have.has(x.path)).map((x) => {
         const fb = splitName(x.name || x.path.split('/').pop());
-        return { id: 'p:' + x.path, path: x.path, name: x.name, size: x.size, type: '', title: known(x.title) || fb.title, artist: known(x.artist) || fb.artist, album: known(x.album), dur: x.dur || 0, art: '', added: Date.now() };
+        return { id: 'p:' + x.path, path: x.path, name: x.name, size: x.size, type: '', title: known(x.title) || fb.title, artist: known(x.artist) || fb.artist, album: known(x.album), dur: x.dur || 0, art: '', added: x.added || Date.now(), addedReal: !!x.added };
       });
       const gone = lib.filter((t) => t.path && !t.own && !paths.has(t.path)); // deleted from the phone since the last scan
       if (fresh.length || gone.length) {
@@ -525,6 +530,34 @@
     } catch { return false; }
   }
 
+  /* ---------- start in the car (free): the phone connects to the car by Bluetooth -> play the whole library on shuffle ---------- */
+  const carSync = () => { if (bg && bg.carSet) bg.carSet({ on: !!prefs.carstart, addrs: prefs.caraddrs || [] }).catch(() => {}); }; // the native receiver works from its own copy
+  function carStart() {
+    if (!prefs.carstart || !lib.length || (cur && !audio.paused)) return; // off, nothing to play, or already playing
+    source = { type: 'library', id: null }; shuffle = true; buildOrder();
+    playId(order[Math.floor(Math.random() * order.length)], true); emit();
+  }
+  async function carMenu() {
+    if (!bg || !bg.carDevices) { toast('Only works in the phone app'); return; }
+    const old = document.getElementById('pl-menu'); if (old) old.remove();
+    const m = document.createElement('div'); m.id = 'pl-menu'; m.className = 'pl-menu';
+    const h = document.createElement('h4'); h.textContent = 'Which one is your car?'; m.appendChild(h);
+    let res = { devices: [] }, status = {}; try { res = await bg.carDevices(); status = await bg.carStatus(); } catch {}
+    const picked = new Set(prefs.caraddrs || []);
+    const note = (text) => { const p = document.createElement('p'); p.className = 'hint'; p.textContent = text; m.appendChild(p); };
+    if (res.denied || !(res.devices || []).length) note(res.denied ? 'Allow Bluetooth access to see your paired devices.' : 'No paired Bluetooth devices. Pair your phone with your car first.');
+    (res.devices || []).forEach((d) => {
+      const b = document.createElement('button'), label = () => `${picked.has(d.addr) ? '\u2713 ' : ''}${d.name}${d.car ? ' (car)' : ''}`;
+      b.textContent = label(); b.onclick = () => { picked.has(d.addr) ? picked.delete(d.addr) : picked.add(d.addr); prefs.caraddrs = [...picked]; savePrefs(); carSync(); b.textContent = label(); };
+      m.appendChild(b);
+    });
+    note('Tick your car. With nothing ticked, any paired car stereo or hands-free device counts.');
+    if (!status.overlay) { const o = document.createElement('button'); o.className = 'new'; o.textContent = 'Let the app open itself\u2026'; o.onclick = () => { bg.carOverlaySettings(); m.remove(); }; m.appendChild(o); note('Needed so the music can start while the app is closed. Without it you get a "Tap to start" notification instead.'); }
+    const done = document.createElement('button'); done.textContent = 'Done'; done.onclick = () => m.remove(); m.appendChild(done);
+    document.getElementById('card').appendChild(m);
+  }
+  { const bc = $('btn-car'); if (bc) bc.onclick = carMenu; }
+
   /* ---------- Android Auto / Assistant (Pro) ---------- */
   function autoPlay(id, listId) { // a song picked in the car's browse tree
     if (!entitled.has('pro') || !id || !lib.some((t) => t.id === id)) return;
@@ -559,6 +592,7 @@
     else if (a === 'play') audio.play(); else if (a === 'pause') audio.pause(); else if (a === 'toggle') (audio.paused ? audio.play() : audio.pause());
     else if (a === 'playId') autoPlay(e.id, e.list);
     else if (a === 'playSearch') autoSearch(e.query);
+    else if (a === 'carStart') libReady.then(carStart);
     else if (a === 'duck') { if (!duckVol) { duckVol = audio.volume; setVol(duckVol * 0.3); } } // another app is speaking: lower the music
     else if (a === 'unduck') { if (duckVol) { setVol(duckVol); duckVol = 0; } }
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
@@ -688,7 +722,9 @@
       for (const [k, v] of Object.entries(patch || {})) {
         if (PRO_KEYS.has(k) && !entitled.has('pro')) continue;
         if (ENUMS[k] && ENUMS[k].includes(v) && allowed(k, v)) prefs[k] = v; else if (typeof DEFAULTS[k] === 'boolean' && typeof v === 'boolean') prefs[k] = v;
-      } savePrefs(); if ('replaygain' in (patch || {}) || 'recordstop' in (patch || {})) pushFx();
+      } savePrefs();
+      if (patch && 'carstart' in patch) { carSync(); if (prefs.carstart && bg && bg.carDevices) bg.carDevices().catch(() => {}); } // turning it on asks for Bluetooth access
+      if ('replaygain' in (patch || {}) || 'recordstop' in (patch || {})) pushFx();
     },
     exportFile: async (f) => { // share sheet (save to Files / send to an app); falls back to the clipboard for text
       try {
@@ -763,6 +799,10 @@
   let libTab = 'songs', openList = null; // openList = id of the playlist being viewed
   const closeLib = () => $('pop-library').classList.remove('open');
   function openLibrary() { if (typeof togglePop === 'function') { if (!$('pop-library').classList.contains('open')) togglePop('library'); } renderLibrary(); }
+  const ago = (ms) => { // "today", "3 days ago", "2 months ago"
+    if (!ms) return ''; const d = Math.floor((Date.now() - ms) / 86400000);
+    return d < 1 ? 'added today' : d < 31 ? `added ${d} day${d === 1 ? '' : 's'} ago` : d < 365 ? `added ${Math.floor(d / 30)} month${Math.floor(d / 30) === 1 ? '' : 's'} ago` : `added ${Math.floor(d / 365)}y ago`;
+  };
   const fmt = (s) => { s = Math.round(s || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const iconBtn = (title, path, onclick, cls = 'star') => {
     const b = document.createElement('button'); b.className = cls; b.title = title; b.setAttribute('aria-label', title);
@@ -773,7 +813,7 @@
     const row = document.createElement('div'); row.className = 'hrow' + (cur && cur.id === t.id ? ' now' : '');
     const th = document.createElement('div'); th.className = 'th'; if (t.art) th.style.backgroundImage = `url("${t.art}")`;
     const tx = document.createElement('div'); tx.className = 'tx';
-    const b = document.createElement('b'); b.textContent = t.title; const sp = document.createElement('span'); sp.textContent = [t.artist, t.dur ? fmt(t.dur) : ''].filter(Boolean).join(' \u00b7 ');
+    const b = document.createElement('b'); b.textContent = t.title; const sp = document.createElement('span'); sp.textContent = [t.artist, t.dur ? fmt(t.dur) : '', libTab === 'songs' && prefs.libsort === 'added' ? ago(t.added) : ''].filter(Boolean).join(' \u00b7 ');
     tx.append(b, sp); row.append(th, tx); (extra || []).forEach((x) => row.appendChild(x));
     return row;
   }
@@ -784,6 +824,7 @@
     window.dispatchEvent(new Event('vibe:library'));
     const tabs = $('lib-tabs'); if (tabs) tabs.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === libTab));
     searchEl.style.display = libTab === 'songs' ? '' : 'none';
+    const sortEl = $('lib-sort'); if (sortEl) { sortEl.style.display = libTab === 'songs' ? '' : 'none'; sortEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === (prefs.libsort || 'name'))); }
     $('lib-actions').style.display = libTab === 'songs' ? '' : 'none';
     if (libTab === 'queue') return renderQueue();
     if (libTab === 'lists') return renderPlaylists();
@@ -921,6 +962,8 @@
     m.append(nw, cancel); document.getElementById('card').appendChild(m);
   }
 
+  const sortBox = $('lib-sort');
+  if (sortBox) sortBox.querySelectorAll('button').forEach((b) => { b.onclick = () => { prefs.libsort = b.dataset.v; savePrefs(); sortLib(); buildOrder(cur && cur.id); renderLibrary(); }; });
   const tabsEl = $('lib-tabs');
   if (tabsEl) tabsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { libTab = b.dataset.v; openList = null; renderLibrary(); }; });
   $('btn-library').onclick = (e) => { e.stopPropagation(); togglePop('library'); renderLibrary(); };
@@ -931,7 +974,8 @@
   let searchTimer = 0; searchEl.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLibrary, 160); }; // wait for a pause in typing
   $('lib-play-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = false; buildOrder(); playId(order[0], true); closeLib(); };
   $('lib-shuffle-all').onclick = () => { if (!lib.length) return; source = { type: 'library', id: null }; shuffle = true; buildOrder(); playId(order[0], true); closeLib(); };
-  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
+  carSync();
+  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); else if (p && p.car) carStart(); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */
