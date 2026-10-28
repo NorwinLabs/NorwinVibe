@@ -146,12 +146,12 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
 /* all five tabs always fit on the screen (the open one is bigger, but never pushes the others out of reach) */
 .lib-tabs button { flex: 0 1 auto; min-width: 0; padding: 6px 2px; font-size: clamp(13px, 4vw, 17px); color: var(--dim); font-weight: 400; transition: color .15s; }
 .lib-tabs button.on { font-size: clamp(15px, 4.6vw, 20px); color: var(--peach); font-weight: 600; }
-.lib-sheet { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: #151515; border-radius: 34px 34px 0 0; }
+.lib-sheet { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; background: #151515; border-radius: 34px 34px 0 0; }
 .lib-actions { flex: none; display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px 26px; }
 .lib-sortbtn { display: flex; align-items: center; gap: 12px; color: #d8cfc9; font-size: 16px; padding: 6px 4px; }
 .lib-count { flex: 1; font-size: 12px; color: var(--dim); text-align: left; padding-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-circ { flex: none; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: #2a2a2a; color: #fff; }
-#pop-library #lib-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; margin: 0; gap: 0; padding: 0 12px calc(96px + var(--sab)) 18px; }
+#pop-library #lib-list { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; margin: 0; gap: 0; padding: 0 12px calc(96px + var(--sab)) 18px; }
 #pop-library .hrow { gap: 16px; padding: 10px 4px 10px 0; border-radius: 0; background: none; contain-intrinsic-size: 0 84px; position: relative; }
 #pop-library .hrow .th { width: 62px; height: 62px; border-radius: 16px; }
 #pop-library .hrow.round .th { border-radius: 50%; }
@@ -184,3 +184,7 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
   #mini-player { left: 8px; right: 8px; width: auto; }
   .card:has(#pop-library.open) #mini-player { display: flex; }
 }
+
+/* a long list must never squeeze the header or the tabs: only the list (inside the sheet) is allowed to give way */
+#pop-library .lib-top, #pop-library .lib-tabs, #pop-library #lib-search, #pop-library .lib-actions { flex: none; }
+#pop-library .lib-sheet { overflow: hidden; }
