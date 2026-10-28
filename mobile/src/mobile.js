@@ -853,7 +853,7 @@
     await libReady;
     window.dispatchEvent(new Event('vibe:library'));
     const tabs = $('lib-tabs');
-    if (tabs) tabs.querySelectorAll('button').forEach((x) => { const on = x.dataset.v === libTab; x.classList.toggle('on', on); if (on) tabs.scrollLeft = x.offsetLeft - (tabs.clientWidth - x.offsetWidth) / 2; });
+    if (tabs) tabs.querySelectorAll('button').forEach((x) => { const on = x.dataset.v === libTab; x.classList.toggle('on', on); if (on && tabs.scrollWidth > tabs.clientWidth + 1) tabs.scrollLeft = x.offsetLeft - (tabs.clientWidth - x.offsetWidth) / 2; }); // only on a screen too narrow to fit them all
     const q = (searchEl.value || '').trim().toLowerCase(), grouped = libTab === 'albums' || libTab === 'artists', kind = libTab === 'albums' ? 'album' : 'artist';
     if (grouped && openGroup && openGroup.kind !== kind) openGroup = null;
     const tracksView = libTab === 'songs' || libTab === 'favs' || (grouped && openGroup);
