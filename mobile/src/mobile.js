@@ -15,7 +15,7 @@
   const toast = (t) => { if (typeof hud === 'function') hud(t); };
 
   /* ================= preferences & store (mirrors main.js) ================= */
-  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', stats: true, replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', carstart: false, libsort: 'name', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
+  const DEFAULTS = { pin: true, mini: false, theme: 'art', record: 'vinyl', speed: 'slow', needle: 'classic', viz: 'bars', bgart: 'cover', stats: true, replaygain: true, recordstop: true, deck3d: false, dancers: true, dancerpack: 'people', carstart: false, aastart: true, libsort: 'name', deckskin: 'dark', deckmove: true, scratchfx: true, autotheme: false, autoDay: 'art', autoEve: 'retro', autoNight: 'midnight', fadeout: false, smartshuffle: false, screensaver: false, ssMin: '5', obs: false, discord: false, lyrics: true, toasts: false, fade: false, snap: false, autostart: false };
   const THEMES = ['art', 'midnight', 'retro', 'neon', 'cyberpunk', 'nightcity'];
   const PRO_KEYS = new Set(['autotheme', 'autoDay', 'autoEve', 'autoNight', 'fadeout', 'smartshuffle']); // only settable with a Pro license (desktop-only Pro switches are not offered here)
   const ENUMS = {
@@ -533,9 +533,10 @@
   }
 
   /* ---------- start in the car (free): the phone connects to the car by Bluetooth -> play the whole library on shuffle ---------- */
-  const carSync = () => { if (bg && bg.carSet) bg.carSet({ on: !!prefs.carstart, addrs: prefs.caraddrs || [] }).catch(() => {}); }; // the native receiver works from its own copy
-  function carStart() {
-    if (!prefs.carstart || !lib.length || (cur && !audio.paused)) return; // off, nothing to play, or already playing
+  const carSync = () => { if (bg && bg.carSet) bg.carSet({ on: !!prefs.carstart, aa: prefs.aastart !== false, addrs: prefs.caraddrs || [] }).catch(() => {}); }; // the native receiver works from its own copy
+  function carStart(src) { // src: 'bt' (the car's Bluetooth) or 'aa' (Android Auto), each with its own switch
+    if (src === 'aa' ? prefs.aastart === false : !prefs.carstart) return;
+    if (!lib.length || (cur && !audio.paused)) return; // nothing to play, or already playing
     source = { type: 'library', id: null }; shuffle = true; buildOrder();
     playId(order[Math.floor(Math.random() * order.length)], true); emit();
   }
@@ -594,7 +595,7 @@
     else if (a === 'play') audio.play(); else if (a === 'pause') audio.pause(); else if (a === 'toggle') (audio.paused ? audio.play() : audio.pause());
     else if (a === 'playId') autoPlay(e.id, e.list);
     else if (a === 'playSearch') autoSearch(e.query);
-    else if (a === 'carStart') libReady.then(carStart);
+    else if (a === 'carStart') libReady.then(() => carStart(e.src));
     else if (a === 'duck') { if (!duckVol) { duckVol = audio.volume; setVol(duckVol * 0.3); } } // another app is speaking: lower the music
     else if (a === 'unduck') { if (duckVol) { setVol(duckVol); duckVol = 0; } }
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
@@ -725,6 +726,7 @@
         if (PRO_KEYS.has(k) && !entitled.has('pro')) continue;
         if (ENUMS[k] && ENUMS[k].includes(v) && allowed(k, v)) prefs[k] = v; else if (typeof DEFAULTS[k] === 'boolean' && typeof v === 'boolean') prefs[k] = v;
       } savePrefs();
+      if (patch && ('aastart' in patch)) carSync();
       if (patch && 'carstart' in patch) { carSync(); if (prefs.carstart && bg && bg.carDevices) bg.carDevices().catch(() => {}); } // turning it on asks for Bluetooth access
       if ('replaygain' in (patch || {}) || 'recordstop' in (patch || {})) pushFx();
     },
@@ -1037,7 +1039,7 @@
   $('lib-play-all').onclick = () => playView(false);
   $('lib-shuffle-all').onclick = () => playView(true);
   carSync();
-  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); if (lib.length && !document.querySelector('.pop.open')) openLibrary(); emit(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); else if (p && p.car) carStart(); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
+  libReady.then(async () => { if (!(await restoreNative())) buildOrder(); renderLibrary(); if (lib.length && !document.querySelector('.pop.open')) openLibrary(); emit(); setTimeout(migrateBlobs, 8000); scanPhone(false); if (bg && bg.takePending) bg.takePending().then((p) => { if (p && p.id) autoPlay(p.id, p.list); else if (p && p.query != null) autoSearch(p.query); else if (p && p.car) carStart(p.car); }).catch(() => {}); }); // quiet rescan on launch (never prompts)
   document.addEventListener('click', (e) => { const m = document.getElementById('pl-menu'); if (m && !e.target.closest('#pl-menu') && !e.target.closest('.star')) m.remove(); });
 
   /* ================= what the shared UI (pro.js) needs from the audio engine ================= */

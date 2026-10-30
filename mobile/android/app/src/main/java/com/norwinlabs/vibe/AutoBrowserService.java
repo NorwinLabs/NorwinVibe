@@ -59,12 +59,25 @@ public class AutoBrowserService extends MediaBrowserService {
         if (uid == Process.myUid() || uid == Process.SYSTEM_UID) return true;
         return getPackageName().equals(pkg) || "com.google.android.projection.gearhead".equals(pkg) || "com.google.android.googlequicksearchbox".equals(pkg)
                 || "com.google.android.carassistant".equals(pkg) || "com.google.android.apps.automotive.templates.host".equals(pkg) || "com.android.systemui".equals(pkg)
-                || "com.google.android.autosimulator".equals(pkg);
+                || "com.google.android.autosimulator".equals(pkg) || "com.google.android.gms".equals(pkg);
     }
 
     @Override
     public BrowserRoot onGetRoot(String clientPackageName, int clientUid, Bundle rootHints) {
-        return trusted(clientPackageName, clientUid) ? new BrowserRoot(ROOT, null) : null;
+        if (!trusted(clientPackageName, clientUid)) return null;
+        // Android Auto connects to the media app when it starts (and when the user opens the app on the car screen): start the music
+        if ("com.google.android.projection.gearhead".equals(clientPackageName) || "com.google.android.apps.automotive.templates.host".equals(clientPackageName) || "com.google.android.gms".equals(clientPackageName)) carConnected(getApplicationContext());
+        return new BrowserRoot(ROOT, null);
+    }
+
+    private static final long QUIET_MS = 90 * 1000; // Android Auto reconnects a few times as it starts: only start the music once
+    private static void carConnected(Context c) {
+        android.content.SharedPreferences sp = c.getSharedPreferences("vibe_car", Context.MODE_PRIVATE);
+        if (!sp.getBoolean("aa", true)) return;
+        long now = System.currentTimeMillis();
+        if (now - sp.getLong("lastAA", 0) < QUIET_MS) return;
+        sp.edit().putLong("lastAA", now).apply();
+        MediaServicePlugin.dispatchCar(c, "aa");
     }
 
     private static MediaBrowser.MediaItem item(String id, String title, String sub, boolean playable) {

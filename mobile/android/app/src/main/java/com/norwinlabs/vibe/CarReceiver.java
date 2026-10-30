@@ -41,6 +41,6 @@ public class CarReceiver extends BroadcastReceiver {
         long now = System.currentTimeMillis();
         if (now - sp.getLong("last", 0) < QUIET_MS) return;
         sp.edit().putLong("last", now).apply();
-        MediaServicePlugin.dispatchCar(ctx.getApplicationContext());
+        MediaServicePlugin.dispatchCar(ctx.getApplicationContext(), "bt");
     }
 }

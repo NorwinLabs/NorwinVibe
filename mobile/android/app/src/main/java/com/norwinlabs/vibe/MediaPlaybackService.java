@@ -133,7 +133,7 @@ public class MediaPlaybackService extends Service {
         if (session == null) {
             session = new MediaSession(appCtx, "NorwinVibe");
             session.setCallback(new MediaSession.Callback() {
-                @Override public void onPlay() { command("play", 0); }
+                @Override public void onPlay() { if (!MediaServicePlugin.alive() && !NativePlayer.engaged()) MediaServicePlugin.dispatchCar(appCtx, "aa"); else command("play", 0); } // the car asked to play but the app is not running: open it and start on shuffle
                 @Override public void onPause() { command("pause", 0); }
                 @Override public void onSkipToNext() { command("next", 0); }
                 @Override public void onSkipToPrevious() { command("prev", 0); }
@@ -142,6 +142,13 @@ public class MediaPlaybackService extends Service {
                 @Override public void onPlayFromSearch(String query, android.os.Bundle extras) { MediaServicePlugin.dispatchPlay(null, null, query == null ? "" : query); }
             });
             session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            // Start in a paused, ready-to-play state (so Android Auto shows a player it can tap and press play on even before anything has played),
+            // and let the car's "open on the phone" go to the app
+            session.setPlaybackState(new PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                            | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
+                    .setState(PlaybackState.STATE_PAUSED, 0, 0f).build());
+            session.setSessionActivity(PendingIntent.getActivity(appCtx, 1, new Intent(appCtx, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
             session.setActive(true);
         }
         return session;
