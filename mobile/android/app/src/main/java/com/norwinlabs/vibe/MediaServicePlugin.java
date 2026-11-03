@@ -293,6 +293,8 @@ public class MediaServicePlugin extends Plugin {
         p.art = call.getString("art", "");
         p.playing = Boolean.TRUE.equals(call.getBoolean("playing", true));
         p.pro = Boolean.TRUE.equals(call.getBoolean("pro", false));
+        p.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
+        p.repeat = call.getString("repeat", "None");
         Long pos = call.getLong("position", 0L);
         Long dur = call.getLong("duration", 0L);
         p.position = pos == null ? 0 : pos;

@@ -37,6 +37,8 @@ public class MediaPlaybackService extends Service {
     static final String ACTION_PREV = "com.norwinlabs.vibe.PREV";
     static final String ACTION_TOGGLE = "com.norwinlabs.vibe.TOGGLE";
     static final String ACTION_NEXT = "com.norwinlabs.vibe.NEXT";
+    static final String ACTION_SHUFFLE = "com.norwinlabs.vibe.SHUFFLE";
+    static final String ACTION_REPEAT = "com.norwinlabs.vibe.REPEAT";
 
     private static final String CHANNEL_ID = "playback";
     private static final int NOTIFICATION_ID = 7;
@@ -61,7 +63,8 @@ public class MediaPlaybackService extends Service {
     /** What the web UI tells us about the current song. */
     static final class Params {
         String title = "NorwinVibe", text = "", album = "", art = "";
-        boolean playing = false, pro = false;
+        boolean playing = false, pro = false, shuffle = false;
+        String repeat = "None"; // None, List or Track
         long position = 0, duration = 0;
     }
 
@@ -99,6 +102,7 @@ public class MediaPlaybackService extends Service {
                 case "seekTo": NativePlayer.seek(pos); break;
                 case "duck": NativePlayer.setDucked(true); break;
                 case "unduck": NativePlayer.setDucked(false); break;
+                case "shuffle": case "repeat": MediaServicePlugin.dispatch(a, 0); break; // the web UI owns the play order and the repeat mode
                 default: break;
             }
         });
@@ -135,6 +139,7 @@ public class MediaPlaybackService extends Service {
             session.setCallback(new MediaSession.Callback() {
                 @Override public void onPlay() { if (!MediaServicePlugin.alive() && !NativePlayer.engaged()) MediaServicePlugin.dispatchCar(appCtx, "aa"); else command("play", 0); } // the car asked to play but the app is not running: open it and start on shuffle
                 @Override public void onPause() { command("pause", 0); }
+                @Override public void onCustomAction(String action, android.os.Bundle extras) { if ("shuffle".equals(action) || "repeat".equals(action)) command(action, 0); } // lock screen / Android Auto buttons
                 @Override public void onSkipToNext() { command("next", 0); }
                 @Override public void onSkipToPrevious() { command("prev", 0); }
                 @Override public void onSeekTo(long pos) { command("seekTo", pos); }
@@ -169,9 +174,13 @@ public class MediaPlaybackService extends Service {
                 | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH;
         session.setPlaybackState(new PlaybackState.Builder()
                 .setActions(actions)
+                .addCustomAction(new PlaybackState.CustomAction.Builder("shuffle", p.shuffle ? "Shuffle on" : "Shuffle off", p.shuffle ? R.drawable.ic_shuffle_on : R.drawable.ic_shuffle).build())
+                .addCustomAction(new PlaybackState.CustomAction.Builder("repeat", "Track".equals(p.repeat) ? "Repeat one" : "List".equals(p.repeat) ? "Repeat all" : "Repeat off", repeatIcon(p.repeat)).build())
                 .setState(p.playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, p.position, p.playing ? 1f : 0f)
                 .build());
     }
+
+    private static int repeatIcon(String mode) { return "Track".equals(mode) ? R.drawable.ic_repeat_one_on : "List".equals(mode) ? R.drawable.ic_repeat_on : R.drawable.ic_repeat; }
 
     private static void releaseSession() {
         if (AutoBrowserService.alive) return; // Android Auto is still using it
@@ -193,10 +202,13 @@ public class MediaPlaybackService extends Service {
         // Bluetooth / headset buttons, the notification shade and the lock screen: for everyone
         updateSession(ctx, p);
         if (lastArt != null) b.setLargeIcon(lastArt);
+        // shuffle, previous, play / pause, next, repeat: the middle three show in the small lock-screen / notification view
+        b.addAction(act(ctx, p.shuffle ? R.drawable.ic_shuffle_on : R.drawable.ic_shuffle, p.shuffle ? "Shuffle on" : "Shuffle off", ACTION_SHUFFLE, 4));
         b.addAction(act(ctx, android.R.drawable.ic_media_previous, "Previous", ACTION_PREV, 1));
         b.addAction(act(ctx, p.playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, p.playing ? "Pause" : "Play", ACTION_TOGGLE, 2));
         b.addAction(act(ctx, android.R.drawable.ic_media_next, "Next", ACTION_NEXT, 3));
-        b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2));
+        b.addAction(act(ctx, repeatIcon(p.repeat), "Track".equals(p.repeat) ? "Repeat one" : "List".equals(p.repeat) ? "Repeat all" : "Repeat off", ACTION_REPEAT, 5));
+        b.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(1, 2, 3));
         return b.build();
     }
 

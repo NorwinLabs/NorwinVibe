@@ -281,7 +281,7 @@
     };
     return o;
   })();
-  let cur = null, order = [], idx = -1, shuffle = false, repeat = 'None', muted = false, xfading = false;
+  let cur = null, order = [], idx = -1, shuffle = true /* shuffle starts on */, repeat = 'None', muted = false, xfading = false;
   let source = { type: 'library', id: null }; // what the queue was built from: the whole library or one playlist
   const cb = {}; // bridge callbacks registered by the shared UI
   const setDeckSrc = (i, blob) => { if (deckUrl[i]) URL.revokeObjectURL(deckUrl[i]); deckUrl[i] = URL.createObjectURL(blob); decks[i].src = deckUrl[i]; };
@@ -495,7 +495,7 @@
   const bg = plugin('MediaService'); let bgOn = false, bgTimer = 0, artSentFor = '';
   const nativePayload = (withArt) => ({
     title: cur ? cur.title : 'NorwinVibe', text: cur ? (cur.artist || 'Playing') : '', album: cur ? cur.album : '',
-    playing: !audio.paused, pro: entitled.has('pro'),
+    playing: !audio.paused, pro: entitled.has('pro'), shuffle, repeat,
     position: Math.round((audio.currentTime || 0) * 1000), duration: Math.round((Number.isFinite(audio.duration) ? audio.duration : (cur && cur.dur) || 0) * 1000),
     art: withArt && cur && cur.art && artSentFor !== keyOf(cur) ? cur.art.split(',')[1] || '' : '',
   });
@@ -596,6 +596,8 @@
     else if (a === 'playId') autoPlay(e.id, e.list);
     else if (a === 'playSearch') autoSearch(e.query);
     else if (a === 'carStart') libReady.then(() => carStart(e.src));
+    else if (a === 'shuffle') window.api.cmd(`shuffle:${shuffle ? 0 : 1}`); // lock screen / Android Auto shuffle button
+    else if (a === 'repeat') window.api.cmd(`repeat:${{ None: 'List', List: 'Track', Track: 'None' }[repeat] || 'None'}`); // ... and repeat: off > all > one
     else if (a === 'duck') { if (!duckVol) { duckVol = audio.volume; setVol(duckVol * 0.3); } } // another app is speaking: lower the music
     else if (a === 'unduck') { if (duckVol) { setVol(duckVol); duckVol = 0; } }
     else if (a === 'next') next(); else if (a === 'prev') prev(); else if (a === 'seekTo') { audio.currentTime = (e.position || 0) / 1000; emit(); }
@@ -713,8 +715,8 @@
       else if (k === 'play') { if (!cur) startPlayback(); else audio.play(); } else if (k === 'pause') audio.pause();
       else if (k === 'next') next(); else if (k === 'prev') prev();
       else if (k === 'seek') { audio.currentTime = parseFloat(v) || 0; emit(); }
-      else if (k === 'shuffle') { shuffle = v === '1'; buildOrder(cur && cur.id); emit(); }
-      else if (k === 'repeat') { repeat = v; if (nativeLive) bg.setRepeat({ mode: v }).catch(() => {}); emit(); }
+      else if (k === 'shuffle') { shuffle = v === '1'; buildOrder(cur && cur.id); emit(); pushNative(); }
+      else if (k === 'repeat') { repeat = v; if (nativeLive) bg.setRepeat({ mode: v }).catch(() => {}); emit(); pushNative(); }
       else if (k === 'volume') { setVol(Math.min(1, Math.max(0, parseFloat(v)))); emit(); }
       else if (k === 'volstep') { setVol(Math.min(1, Math.max(0, audio.volume + parseFloat(v)))); emit(); }
       else if (k === 'mute') { muted = v === '1'; [...decks, nd].forEach((d) => { d.muted = muted; }); emit(); }

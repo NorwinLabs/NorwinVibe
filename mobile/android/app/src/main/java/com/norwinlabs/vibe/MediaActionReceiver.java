@@ -12,6 +12,8 @@ public class MediaActionReceiver extends BroadcastReceiver {
         switch (intent.getAction()) {
             case MediaPlaybackService.ACTION_PREV: MediaPlaybackService.command("prev", 0); break;
             case MediaPlaybackService.ACTION_NEXT: MediaPlaybackService.command("next", 0); break;
+            case MediaPlaybackService.ACTION_SHUFFLE: MediaPlaybackService.command("shuffle", 0); break;
+            case MediaPlaybackService.ACTION_REPEAT: MediaPlaybackService.command("repeat", 0); break;
             case MediaPlaybackService.ACTION_TOGGLE: MediaPlaybackService.command("toggle", 0); break;
             default: break;
         }
