@@ -257,9 +257,30 @@ public class MediaPlaybackService extends Service {
             handler.postDelayed(this, 700);
         }
     };
+    /* Android Auto connecting: it binds to AutoBrowserService (which stamps "aaSeen") and often takes the audio route and focus for a moment */
+    private boolean aaRecent() { return System.currentTimeMillis() - getSharedPreferences("vibe_car", Context.MODE_PRIVATE).getLong("aaSeen", 0) < 20000; }
+    /** Is the sound going somewhere other than the phone's own speaker (a Bluetooth speaker or car, a USB device, wired headphones)? */
+    private boolean externalOutput() {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        try {
+            for (android.media.AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                switch (d.getType()) {
+                    case android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP: case android.media.AudioDeviceInfo.TYPE_USB_DEVICE: case android.media.AudioDeviceInfo.TYPE_USB_HEADSET:
+                    case android.media.AudioDeviceInfo.TYPE_USB_ACCESSORY: case android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES: case android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET: return true;
+                    default: if (Build.VERSION.SDK_INT >= 24 && d.getType() == android.media.AudioDeviceInfo.TYPE_BUS) return true; if (Build.VERSION.SDK_INT >= 31 && d.getType() == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET) return true;
+                }
+            }
+        } catch (Exception ignored) { }
+        return false;
+    }
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
-            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) command("pause", 0);
+            if (!AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) return;
+            final boolean was = lastPlaying;
+            command("pause", 0); // the speaker or headphones that were playing went away: never blast the phone's own speaker
+            // ... but moving from one output to another (Bluetooth speaker -> the car, Android Auto taking over) is not "unplugged": carry on there
+            if (was) handler.postDelayed(() -> { if (!lastPlaying && !pausedByFocus && (AutoBrowserService.alive || externalOutput())) command("play", 0); }, 1500);
         }
     };
     private final AudioManager.OnAudioFocusChangeListener focusListener = (change) -> {
@@ -272,7 +293,9 @@ public class MediaPlaybackService extends Service {
                 handler.removeCallbacks(callWatch); handler.postDelayed(callWatch, 300); break;
             }
             case AudioManager.AUDIOFOCUS_LOSS:
-                pausedByFocus = false; focusHeld = false; command("pause", 0); break; // another app took the speaker for good (its own music or video): stay paused, and ask for focus again when played
+                { final boolean was = lastPlaying; pausedByFocus = false; focusHeld = false; command("pause", 0);
+                  if (was && aaRecent()) handler.postDelayed(() -> { if (!lastPlaying) { takeFocus(); command("play", 0); } }, 2500); // Android Auto grabbed the speaker as it connected: take it back and carry on
+                  break; } // another app took the speaker for good (its own music or video): stay paused, and ask for focus again when played
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                 ducked = true; command("duck", 0); break;
             case AudioManager.AUDIOFOCUS_GAIN:

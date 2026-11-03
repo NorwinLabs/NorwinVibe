@@ -66,7 +66,10 @@ public class AutoBrowserService extends MediaBrowserService {
     public BrowserRoot onGetRoot(String clientPackageName, int clientUid, Bundle rootHints) {
         if (!trusted(clientPackageName, clientUid)) return null;
         // Android Auto connects to the media app when it starts (and when the user opens the app on the car screen): start the music
-        if ("com.google.android.projection.gearhead".equals(clientPackageName) || "com.google.android.apps.automotive.templates.host".equals(clientPackageName) || "com.google.android.gms".equals(clientPackageName)) carConnected(getApplicationContext());
+        if ("com.google.android.projection.gearhead".equals(clientPackageName) || "com.google.android.apps.automotive.templates.host".equals(clientPackageName) || "com.google.android.gms".equals(clientPackageName)) {
+            getApplicationContext().getSharedPreferences("vibe_car", Context.MODE_PRIVATE).edit().putLong("aaSeen", System.currentTimeMillis()).apply(); // (the music service keeps playing through the connection hand-over)
+            carConnected(getApplicationContext());
+        }
         return new BrowserRoot(ROOT, null);
     }
 

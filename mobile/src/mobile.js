@@ -537,6 +537,7 @@
   function carStart(src) { // src: 'bt' (the car's Bluetooth) or 'aa' (Android Auto), each with its own switch
     if (src === 'aa' ? prefs.aastart === false : !prefs.carstart) return;
     if (!lib.length || (cur && !audio.paused)) return; // nothing to play, or already playing
+    if (cur) { if (!shuffle) { shuffle = true; buildOrder(cur.id); } audio.play(); emit(); return; } // something is loaded (e.g. just paused as the output changed): carry on with it
     source = { type: 'library', id: null }; shuffle = true; buildOrder();
     playId(order[Math.floor(Math.random() * order.length)], true); emit();
   }
