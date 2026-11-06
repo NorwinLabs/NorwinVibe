@@ -459,7 +459,9 @@
     const t = cur ? lib.find((x) => x.id === peekNext()) : null, txt = t ? `Up next · ${t.title}${t.artist ? ' – ' + t.artist : ''}` : '';
     if (txt !== lastUp) { lastUp = txt; e.textContent = txt; }
   }
+  let sentShuffle = null, sentRepeat = null;
   function emit() {
+    try { if (bg && bg.setModes && (shuffle !== sentShuffle || repeat !== sentRepeat)) { sentShuffle = shuffle; sentRepeat = repeat; bg.setModes({ shuffle, repeat }).catch(() => {}); } } catch {} // keeps the lock screen / Android Auto buttons in step
     updateUpNext();
     if (!cb.state) return;
     if (!cur) { cb.state({ type: 'state', active: false, vol: audio.volume, muted }); return; }

@@ -151,6 +151,13 @@ public class MediaServicePlugin extends Plugin {
         call.resolve();
     }
 
+    /** Shuffle / repeat changed in the web UI (so the lock screen and Android Auto buttons show the right state). */
+    @PluginMethod
+    public void setModes(PluginCall call) {
+        MediaPlaybackService.setModes(getContext(), Boolean.TRUE.equals(call.getBoolean("shuffle", false)), call.getString("repeat", "None"));
+        call.resolve();
+    }
+
     static boolean alive() { return instance != null; }
 
     /** Native player -> web UI ({ type: track | state | needjs | error, ... }). */
@@ -295,6 +302,7 @@ public class MediaServicePlugin extends Plugin {
         p.pro = Boolean.TRUE.equals(call.getBoolean("pro", false));
         p.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
         p.repeat = call.getString("repeat", "None");
+        p.modes = call.hasOption("shuffle") || call.hasOption("repeat");
         Long pos = call.getLong("position", 0L);
         Long dur = call.getLong("duration", 0L);
         p.position = pos == null ? 0 : pos;

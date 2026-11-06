@@ -63,7 +63,7 @@ public class MediaPlaybackService extends Service {
     /** What the web UI tells us about the current song. */
     static final class Params {
         String title = "NorwinVibe", text = "", album = "", art = "";
-        boolean playing = false, pro = false, shuffle = false;
+        boolean playing = false, pro = false, shuffle = false, modes = false; // modes: this update carries the shuffle / repeat state (the native player's own updates do not)
         String repeat = "None"; // None, List or Track
         long position = 0, duration = 0;
     }
@@ -123,7 +123,7 @@ public class MediaPlaybackService extends Service {
         if (playing || lastPlaying) lastPlayAt = System.currentTimeMillis(); // (also the moment it stops: "paused for a while" counts from the pause)
         lastPlaying = playing;
         MediaPlaybackService i = inst;
-        if (i != null && (playing || System.currentTimeMillis() - i.focusPauseAt > 1500)) i.pausedByFocus = false;
+        if (i != null && playing) i.pausedByFocus = false; // (only playing again cancels the resume: the notification keeps reporting "paused" all through a call, which must not)
         if (i != null && playing) i.takeFocus(); // (playing again after the speaker was given back: ask for it again)
         // Paused by the user (not by a call or other media): give the speaker back, so other apps can start or resume their own sound
         if (i != null && !playing) i.handler.postDelayed(() -> { if (!lastPlaying && !i.pausedByFocus) i.dropFocus(); }, 1500);
@@ -228,7 +228,22 @@ public class MediaPlaybackService extends Service {
     }
 
     /** Refreshes the notification, session and widget (track change, play / pause, seek) without restarting the service. */
+    private static volatile boolean gShuffle = false;
+    private static volatile String gRepeat = "None";
+    private static volatile Params lastP;
+    /** The web UI changed shuffle / repeat: remember it and redraw the notification, lock screen and Android Auto buttons. */
+    static void setModes(Context ctx, boolean shuffle, String repeat) {
+        gShuffle = shuffle; gRepeat = repeat == null ? "None" : repeat;
+        Params p = lastP;
+        if (p == null || ctx == null) return;
+        p.playing = lastPlaying; p.shuffle = gShuffle; p.repeat = gRepeat; // a redraw only: it must not touch the play-state bookkeeping
+        Notification n = apply(ctx, p);
+        if (running) ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, n);
+    }
+
     static void update(Context ctx, Params p) {
+        if (p.modes) { gShuffle = p.shuffle; gRepeat = p.repeat; } else { p.shuffle = gShuffle; p.repeat = gRepeat; }
+        lastP = p;
         noteState(p.playing);
         Notification n = apply(ctx, p);
         if (running) setWake(ctx, p.playing);
@@ -249,11 +264,32 @@ public class MediaPlaybackService extends Service {
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     /* While paused by something else, watch for a phone call (the audio mode becomes ring / call / communication). Calls resume the music
        when they end however long they were; an alarm or other media does not. (No phone permission needed: it only reads the audio mode.) */
+    private boolean watching = false, sawCall = false;
+    private long watchSince = 0;
+    private int calm = 0;
+    private boolean inCall() {
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        int md = am.getMode();
+        return md == AudioManager.MODE_IN_CALL || md == AudioManager.MODE_IN_COMMUNICATION || md == AudioManager.MODE_RINGTONE;
+    }
+    /** The music just stopped because another app took the speaker. If that turns out to be a phone call, start again when the call is over,
+        even when the phone never hands the focus back (some take it "for good"). */
+    private void startWatch(boolean callNow) {
+        watching = true; watchSince = System.currentTimeMillis(); sawCall = callNow; calm = 0;
+        handler.removeCallbacks(callWatch); handler.postDelayed(callWatch, 300);
+    }
     private final Runnable callWatch = new Runnable() {
         @Override public void run() {
-            if (!pausedByFocus) return;
-            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (am != null) { int md = am.getMode(); if (md == AudioManager.MODE_IN_CALL || md == AudioManager.MODE_IN_COMMUNICATION || md == AudioManager.MODE_RINGTONE) focusPauseCall = true; }
+            if (!watching) return;
+            if (lastPlaying) { watching = false; return; } // playing again (the user, or the focus came back): nothing to do
+            boolean call = inCall();
+            if (call) { sawCall = true; focusPauseCall = true; calm = 0; }
+            else if (sawCall && ++calm >= 2) { // the call ended and the audio mode has been back to normal for a moment
+                watching = false; pausedByFocus = false; takeFocus(); command("play", 0); return;
+            }
+            long waited = System.currentTimeMillis() - watchSince;
+            if ((!sawCall && !pausedByFocus && waited > 4000) || waited > 4 * 3600 * 1000L) { watching = false; return; } // not a call: nothing to wait for
             handler.postDelayed(this, 700);
         }
     };
@@ -290,17 +326,18 @@ public class MediaPlaybackService extends Service {
                 AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
                 focusPauseCall = am != null && am.getMode() != AudioManager.MODE_NORMAL; // a phone call: worth resuming after, however long it was
                 pausedByFocus = true; focusPauseAt = System.currentTimeMillis(); command("pause", 0);
-                handler.removeCallbacks(callWatch); handler.postDelayed(callWatch, 300); break;
+                startWatch(focusPauseCall); break;
             }
             case AudioManager.AUDIOFOCUS_LOSS:
                 { final boolean was = lastPlaying; pausedByFocus = false; focusHeld = false; command("pause", 0);
+                  if (was) startWatch(inCall()); // (a call that takes the focus for good: carry on when it ends)
                   if (was && aaRecent()) handler.postDelayed(() -> { if (!lastPlaying) { takeFocus(); command("play", 0); } }, 2500); // Android Auto grabbed the speaker as it connected: take it back and carry on
                   break; } // another app took the speaker for good (its own music or video): stay paused, and ask for focus again when played
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                 ducked = true; command("duck", 0); break;
             case AudioManager.AUDIOFOCUS_GAIN:
                 // Resume after a short blip (a notification, a navigation prompt) or a call. An alarm or a long interruption: stay paused.
-                if (pausedByFocus) { pausedByFocus = false; if (focusPauseCall || System.currentTimeMillis() - focusPauseAt < 20000) command("play", 0); }
+                if (pausedByFocus) { pausedByFocus = false; watching = false; if (focusPauseCall || System.currentTimeMillis() - focusPauseAt < 20000) command("play", 0); }
                 if (ducked) { ducked = false; command("unduck", 0); }
                 break;
             default: break;
