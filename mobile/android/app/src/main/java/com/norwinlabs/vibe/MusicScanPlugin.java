@@ -2,6 +2,7 @@ package com.norwinlabs.vibe;
 
 import android.Manifest;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -35,6 +36,77 @@ import com.getcapacitor.annotation.PermissionCallback;
 )
 public class MusicScanPlugin extends Plugin {
     private static final long MIN_MS = 15000; // skips ringtones, notification sounds and voice clips
+
+    /* ---- delete songs from the phone itself ----
+       Android 11+: one system "Allow NorwinVibe to delete these songs?" prompt for the whole batch. Android 10: the system asks per song.
+       Android 9 and older: deleted straight away when the system lets the app. Songs that are already gone count as deleted. */
+    static final int REQ_DELETE = 4242;
+    private static PluginCall pendingDelete;
+    private static java.util.List<Uri> pendingUris;
+    private static java.util.List<String> pendingPaths;
+
+    private Uri audioBase() { return Build.VERSION.SDK_INT >= 29 ? MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL) : MediaStore.Audio.Media.EXTERNAL_CONTENT_URI; }
+
+    @PluginMethod
+    public void deleteSongs(PluginCall call) {
+        if (pendingDelete != null) { call.reject("Another delete is waiting for an answer"); return; }
+        java.util.List<String> paths = new java.util.ArrayList<>(), gone = new java.util.ArrayList<>(), todo = new java.util.ArrayList<>();
+        java.util.List<Uri> uris = new java.util.ArrayList<>();
+        try { JSArray a = call.getArray("paths"); for (int i = 0; a != null && i < a.length(); i++) paths.add(a.getString(i)); } catch (Exception ignored) { }
+        ContentResolver cr = getContext().getContentResolver();
+        for (String p : paths) {
+            if (p == null || p.isEmpty()) continue;
+            Uri u = null;
+            try (Cursor c = cr.query(audioBase(), new String[] { MediaStore.Audio.Media._ID }, MediaStore.Audio.Media.DATA + " = ?", new String[] { p }, null)) {
+                if (c != null && c.moveToFirst()) u = android.content.ContentUris.withAppendedId(audioBase(), c.getLong(0));
+            } catch (Exception ignored) { }
+            if (u == null) { if (!new java.io.File(p).exists()) gone.add(p); continue; } // not in the media index: if the file is not there either, it is already gone
+            uris.add(u); todo.add(p);
+        }
+        if (uris.isEmpty()) { finishDelete(call, gone, false); return; }
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.app.PendingIntent pi = MediaStore.createDeleteRequest(cr, uris);
+                pendingDelete = call; pendingUris = uris; pendingPaths = todo; pendingDone = gone;
+                getActivity().startIntentSenderForResult(pi.getIntentSender(), REQ_DELETE, null, 0, 0, 0);
+            } else {
+                // Android 10 and older: try straight away; on 10 the system may want a yes for each song
+                for (int i = 0; i < uris.size(); i++) {
+                    try { if (cr.delete(uris.get(i), null, null) > 0) gone.add(todo.get(i)); else if (new java.io.File(todo.get(i)).delete()) gone.add(todo.get(i)); }
+                    catch (SecurityException e) {
+                        if (Build.VERSION.SDK_INT == 29 && e instanceof android.app.RecoverableSecurityException) {
+                            pendingDelete = call; pendingUris = new java.util.ArrayList<>(uris.subList(i, uris.size())); pendingPaths = new java.util.ArrayList<>(todo.subList(i, todo.size())); pendingDone = gone;
+                            getActivity().startIntentSenderForResult(((android.app.RecoverableSecurityException) e).getUserAction().getActionIntent().getIntentSender(), REQ_DELETE, null, 0, 0, 0);
+                            return;
+                        }
+                    }
+                }
+                finishDelete(call, gone, false);
+            }
+        } catch (Exception e) { pendingDelete = null; finishDelete(call, gone, false); }
+    }
+    private static java.util.List<String> pendingDone;
+
+    private void finishDelete(PluginCall call, java.util.List<String> deleted, boolean denied) {
+        JSObject o = new JSObject(); JSArray a = new JSArray();
+        for (String p : deleted) a.put(p);
+        o.put("deleted", a); o.put("denied", denied); call.resolve(o);
+    }
+
+    /** MainActivity hands the answer to the system's delete prompt here. Returns true when it was ours. */
+    static boolean onDeleteResult(Context ctx, int requestCode, int resultCode) {
+        if (requestCode != REQ_DELETE || pendingDelete == null) return false;
+        PluginCall call = pendingDelete; java.util.List<Uri> uris = pendingUris; java.util.List<String> paths = pendingPaths, done = pendingDone;
+        pendingDelete = null; pendingUris = null; pendingPaths = null; pendingDone = null;
+        JSObject o = new JSObject(); JSArray a = new JSArray();
+        boolean ok = resultCode == android.app.Activity.RESULT_OK;
+        if (ok && Build.VERSION.SDK_INT < 30) { // Android 10: the user allowed that song; delete it (the rest, if any, are asked about again by the next tap)
+            try { if (ctx.getContentResolver().delete(uris.get(0), null, null) > 0) done.add(paths.get(0)); } catch (Exception ignored) { }
+        } else if (ok) done.addAll(paths);
+        for (String p : done) a.put(p);
+        o.put("deleted", a); o.put("denied", !ok); call.resolve(o);
+        return true;
+    }
 
     private String alias() { return Build.VERSION.SDK_INT >= 33 ? "audio" : "storage"; }
 

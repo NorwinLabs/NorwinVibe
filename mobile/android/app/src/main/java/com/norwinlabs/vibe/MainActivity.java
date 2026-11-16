@@ -58,6 +58,12 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        if (MusicScanPlugin.onDeleteResult(this, requestCode, resultCode)) return; // the answer to "allow NorwinVibe to delete these songs?"
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
     private void applyInsets() {
         if (insetsJs.isEmpty() || getBridge() == null || getBridge().getWebView() == null) return;
         final WebView wv = getBridge().getWebView();

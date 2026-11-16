@@ -188,3 +188,5 @@ html:not([data-bgart="cover"]) body.mobile .bg { filter: blur(22px) saturate(1.4
 /* a long list must never squeeze the header or the tabs: only the list (inside the sheet) is allowed to give way */
 #pop-library .lib-top, #pop-library .lib-tabs, #pop-library #lib-search, #pop-library .lib-actions { flex: none; }
 #pop-library .lib-sheet { overflow: hidden; }
+
+.pl-menu button.danger { color: #ff7a7a; }

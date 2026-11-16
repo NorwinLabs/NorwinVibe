@@ -199,7 +199,8 @@
       const redated = []; // songs already here get the date the phone's media index says they were added (once), so "last added" is real
       for (const x of found) { const t = have.get(x.path); if (t && x.added && !t.addedReal) { t.added = x.added; t.addedReal = true; redated.push(t); } }
       if (redated.length) { await dbMulti(['meta'], (m) => redated.forEach((r) => m.put(r))); sortLib(); buildOrder(cur && cur.id); renderLibrary(); }
-      const fresh = found.filter((x) => !have.has(x.path)).map((x) => {
+      const hidden = new Set(LS.get('vibe.hidden', [])); // songs the user removed from the library: a rescan must not bring them back
+      const fresh = found.filter((x) => !have.has(x.path) && !hidden.has(x.path)).map((x) => {
         const fb = splitName(x.name || x.path.split('/').pop());
         return { id: 'p:' + x.path, path: x.path, name: x.name, size: x.size, type: '', title: known(x.title) || fb.title, artist: known(x.artist) || fb.artist, album: known(x.album), dur: x.dur || 0, art: '', added: x.added || Date.now(), addedReal: !!x.added };
       });
@@ -228,8 +229,9 @@
   }
   // the cover is read BEFORE the song is announced, so the picture never pops in after the title (that was the flicker)
   const artFirst = (t, blob) => Promise.race([lazyArt(t, blob), new Promise((r) => setTimeout(r, 1500))]);
-  async function removeTrack(id) {
+  async function removeTrack(id, opts) {
     const gone = lib.find((t) => t.id === id); if (gone && gone.own && bg) bg.deleteFile({ path: gone.path }).catch(() => {});
+    if (gone && gone.path && !gone.own && !(opts && opts.forget === false)) { const h = new Set(LS.get('vibe.hidden', [])); h.add(gone.path); LS.set('vibe.hidden', [...h]); } // stays removed after the next scan
     await dbMulti(['meta', 'blobs'], (m, b) => { m.delete(id); b.delete(id); });
     lib = lib.filter((t) => t.id !== id);
     playlists.forEach((p) => { p.ids = p.ids.filter((x) => x !== id); }); savePlaylists();
@@ -850,9 +852,36 @@
     ['Play next', () => playNext(t.id)],
     ['Add to a playlist', () => pickPlaylist(t.id)],
     [isFavT(t) ? 'Remove from favourites' : 'Add to favourites', () => toggleFavT(t)],
-    ['Remove from library', () => { if (confirm(`Remove "${t.title}" from your library?`)) removeTrack(t.id); }],
+    ['Remove from library', () => { if (confirm(`Remove "${t.title}" from your library? The song stays on your phone.`)) removeTrack(t.id); }],
+    ['Delete from phone\u2026', () => deleteFromPhone([t]), 'danger'],
     ['Cancel', () => {}],
   ]);
+  /* Delete the song files from the phone itself (Android shows its own "allow to delete?" prompt), then take them out of the library. */
+  async function deleteFromPhone(ts) {
+    const own = ts.filter((t) => t.own || !t.path), real = ts.filter((t) => t.path && !t.own);
+    const what = ts.length === 1 ? `"${ts[0].title}"` : `${ts.length} songs`;
+    if (!confirm(`Delete ${what} from your phone? The file${ts.length === 1 ? '' : 's'} will be permanently deleted and cannot be brought back.`)) return;
+    const deleted = new Set();
+    if (real.length) {
+      if (!scanner || !scanner.deleteSongs) { toast('Deleting from the phone only works in the phone app'); if (!own.length) return; }
+      else {
+        try {
+          const res = await scanner.deleteSongs({ paths: real.map((t) => t.path) });
+          (res.deleted || []).forEach((p) => deleted.add(p));
+          if (!deleted.size) { toast(res.denied ? 'Nothing was deleted' : 'Could not delete from the phone'); if (!own.length) return; }
+        } catch { toast('Could not delete from the phone'); if (!own.length) return; }
+      }
+    }
+    let n = 0;
+    for (const t of ts) if (t.own || !t.path || deleted.has(t.path)) { await removeTrack(t.id, { forget: false }); n++; } // the file is gone, so there is nothing to keep hidden
+    if (n) toast(`Deleted ${n} song${n === 1 ? '' : 's'}`);
+    if (real.length > deleted.size && deleted.size) toast(`Deleted ${deleted.size} of ${real.length}`);
+  }
+  function restoreRemoved() { // removed songs come back on the next scan
+    const n = LS.get('vibe.hidden', []).length;
+    if (!n) { toast('No removed songs'); return; }
+    LS.set('vibe.hidden', []); toast(`Bringing back ${n} song${n === 1 ? '' : 's'}`); scanPhone(true);
+  }
   const groupKey = (kind, t) => ((kind === 'album' ? t.album : t.artist) || '').trim().toLowerCase();
   const groupName = (kind, t) => ((kind === 'album' ? t.album : t.artist) || '').trim() || (kind === 'album' ? 'Unknown album' : 'Unknown artist');
 
@@ -1031,7 +1060,7 @@
   $('lib-search-btn').onclick = (e) => { e.stopPropagation(); const on = !searchEl.classList.contains('show'); searchEl.classList.toggle('show', on); if (on) { if (libTab !== 'songs' && libTab !== 'favs') { libTab = 'songs'; openGroup = null; openList = null; renderLibrary(); } searchEl.focus(); } else { searchEl.value = ''; renderLibrary(); } };
   $('lib-menu-btn').onclick = (e) => { e.stopPropagation(); popMenu('', [
     ['Find my music', () => $('lib-add').click()], ['Add files', () => $('lib-pick').click()], ['Queue', () => { libTab = 'queue'; renderLibrary(); }],
-    ['History & favourites', () => $('btn-history').click()], ['Settings', () => $('btn-settings').click()], ['Now playing', () => document.querySelectorAll('.pop.open').forEach((x) => x.classList.remove('open'))],
+    ['Bring back removed songs', restoreRemoved], ['History & favourites', () => $('btn-history').click()], ['Settings', () => $('btn-settings').click()], ['Now playing', () => document.querySelectorAll('.pop.open').forEach((x) => x.classList.remove('open'))],
   ]); };
   const tabsEl = $('lib-tabs');
   if (tabsEl) tabsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { libTab = b.dataset.v; openList = null; openGroup = null; renderLibrary(); }; });
